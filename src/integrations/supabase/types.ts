@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      Client_Bookings: {
+        Row: {
+          booking_date: string | null
+          booking_status: string | null
+          created_at: string
+          earliest_time: string | null
+          email: string | null
+          First: string | null
+          id: number
+          Last: string | null
+          latest_time: string | null
+          number_of_players: number | null
+          phone: string | null
+          preferred_course: string | null
+          promo_code: string | null
+          stripe_payment_intent_id: string | null
+          total_price: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          booking_date?: string | null
+          booking_status?: string | null
+          created_at?: string
+          earliest_time?: string | null
+          email?: string | null
+          First?: string | null
+          id?: number
+          Last?: string | null
+          latest_time?: string | null
+          number_of_players?: number | null
+          phone?: string | null
+          preferred_course?: string | null
+          promo_code?: string | null
+          stripe_payment_intent_id?: string | null
+          total_price?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          booking_date?: string | null
+          booking_status?: string | null
+          created_at?: string
+          earliest_time?: string | null
+          email?: string | null
+          First?: string | null
+          id?: number
+          Last?: string | null
+          latest_time?: string | null
+          number_of_players?: number | null
+          phone?: string | null
+          preferred_course?: string | null
+          promo_code?: string | null
+          stripe_payment_intent_id?: string | null
+          total_price?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       Course_Database: {
         Row: {
           address: string | null
