@@ -34,6 +34,8 @@ interface Booking {
   total_price: number;
   promo_code?: string;
   created_at: string;
+  cancelled?: boolean;
+  cancelled_at?: string;
 }
 
 const Profile = () => {
@@ -86,7 +88,11 @@ const Profile = () => {
     try {
       const { error } = await supabase
         .from('Client_Bookings')
-        .update({ booking_status: 'cancelled' })
+        .update({ 
+          booking_status: 'cancelled',
+          cancelled: true,
+          cancelled_at: new Date().toISOString()
+        })
         .eq('id', bookingId);
 
       if (error) throw error;
@@ -227,6 +233,11 @@ const Profile = () => {
                           <div className="flex items-center space-x-3">
                             <Badge className={getStatusColor(booking.booking_status)}>
                               {booking.booking_status.charAt(0).toUpperCase() + booking.booking_status.slice(1)}
+                              {booking.cancelled && booking.cancelled_at && (
+                                <span className="ml-1">
+                                  - {new Date(booking.cancelled_at).toLocaleDateString()}
+                                </span>
+                              )}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
                               Requested on {new Date(booking.created_at).toLocaleDateString()}

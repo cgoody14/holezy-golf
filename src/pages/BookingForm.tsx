@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, Clock, Users, MapPin, Phone, Mail, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import CourseSelector from '@/components/CourseSelector';
+import AuthDialog from '@/components/AuthDialog';
 
 export interface BookingData {
   firstName: string;
@@ -24,6 +26,8 @@ export interface BookingData {
 const BookingForm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [user, setUser] = useState(null);
   
   const [formData, setFormData] = useState<BookingData>({
     firstName: '',
@@ -36,6 +40,15 @@ const BookingForm = () => {
     numberOfPlayers: 1,
     preferredCourse: ''
   });
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setUser(session?.user || null);
+  };
 
   const timeSlots = [
     '6:00 AM', '6:30 AM', '7:00 AM', '7:30 AM', '8:00 AM', '8:30 AM',
@@ -135,6 +148,14 @@ const BookingForm = () => {
         description: "Please select a golf course",
         variant: "destructive"
       });
+      return;
+    }
+
+    // Check if user is authenticated
+    if (!user) {
+      // Store form data temporarily and show auth dialog
+      sessionStorage.setItem('bookingData', JSON.stringify(formData));
+      setShowAuthDialog(true);
       return;
     }
 
@@ -289,13 +310,20 @@ const BookingForm = () => {
                         <SelectValue placeholder="Select latest time" />
                       </SelectTrigger>
                       <SelectContent>
-                        {timeSlots.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            <div className="flex items-center space-x-2">
-                              <Clock className="w-4 h-4" />
-                              <span>{time}</span>
-                            </div>
-                          </SelectItem>
+                        {timeSlots
+                          .filter(time => {
+                            if (!formData.earliestTime) return true;
+                            const earliestIndex = timeSlots.indexOf(formData.earliestTime);
+                            const currentIndex = timeSlots.indexOf(time);
+                            return currentIndex >= earliestIndex;
+                          })
+                          .map((time) => (
+                            <SelectItem key={time} value={time}>
+                              <div className="flex items-center space-x-2">
+                                <Clock className="w-4 h-4" />
+                                <span>{time}</span>
+                              </div>
+                            </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -352,6 +380,15 @@ const BookingForm = () => {
             </form>
           </CardContent>
         </Card>
+
+        <AuthDialog
+          isOpen={showAuthDialog}
+          onClose={() => setShowAuthDialog(false)}
+          onSuccess={() => {
+            checkAuth();
+            navigate('/checkout');
+          }}
+        />
       </div>
     </div>
   );
