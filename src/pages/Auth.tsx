@@ -14,6 +14,7 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -84,6 +85,7 @@ const Auth = () => {
           data: {
             first_name: firstName,
             last_name: lastName,
+            phone: phone
           }
         }
       });
@@ -103,6 +105,20 @@ const Auth = () => {
           });
         }
       } else {
+        // Send welcome email
+        try {
+          await supabase.functions.invoke('send-booking-confirmation', {
+            body: {
+              to: email,
+              firstName: firstName,
+              lastName: lastName,
+              type: 'welcome'
+            }
+          });
+        } catch (emailError) {
+          console.error('Welcome email failed:', emailError);
+        }
+
         toast({
           title: "Account created!",
           description: "Please check your email to verify your account."
@@ -209,6 +225,16 @@ const Auth = () => {
                         required
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-phone">Phone (Optional)</Label>
+                    <Input
+                      id="signup-phone"
+                      type="tel"
+                      placeholder="(555) 123-4567"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>

@@ -173,7 +173,23 @@ const Checkout = () => {
         return `${hours.padStart(2, '0')}:${minutes}:00`;
       };
 
-      // Save booking to database
+      // Update client account with contact info and store payment method
+      const lastFourDigits = cardNumber.replace(/\s/g, '').slice(-4);
+      const { error: updateError } = await supabase
+        .from('Client_Accounts')
+        .update({ 
+          phone: bookingData.phone,
+          email: bookingData.email,
+          // Store encrypted payment info (in real app, use proper encryption)
+          default_payment_method_id: `card_****${lastFourDigits}`
+        })
+        .eq('id', clientAccount.id);
+
+      if (updateError) {
+        console.error('Failed to update client account:', updateError);
+      }
+
+      // Save booking to database with payment information
       const bookingRecord = {
         client_id: clientAccount.id,
         First: bookingData.firstName,
@@ -188,6 +204,10 @@ const Checkout = () => {
         booking_status: 'pending',
         total_price: calculateTotal(),
         promo_code: promoCode || null,
+        payment_status: 'pending',
+        stripe_payment_method_id: `card_****${lastFourDigits}`,
+        amount_charged: calculateTotal(),
+        currency: 'usd',
         stripe_payment_intent_id: null // Will be updated when charged manually
       };
 
@@ -216,7 +236,13 @@ const Checkout = () => {
       // Send confirmation email
       try {
         await supabase.functions.invoke('send-booking-confirmation', {
-          body: confirmationData
+          body: {
+            ...confirmationData,
+            type: 'booking_confirmation',
+            firstName: bookingData.firstName,
+            lastName: bookingData.lastName,
+            email: bookingData.email
+          }
         });
       } catch (emailError) {
         console.error('Email error:', emailError);

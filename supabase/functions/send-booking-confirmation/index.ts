@@ -8,19 +8,66 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface EmailRequest {
+  to?: string;
+  email?: string;
+  firstName: string;
+  lastName: string;
+  type: 'welcome' | 'booking_confirmation';
+  bookingDetails?: any;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const bookingData = await req.json();
+    const data: EmailRequest = await req.json();
+    const email = data.to || data.email;
 
-    const emailResponse = await resend.emails.send({
-      from: "GolfBooker <onboarding@resend.dev>",
-      to: [bookingData.email],
-      subject: "Golf Tee Time Booking Confirmation",
-      html: `
+    let subject: string;
+    let html: string;
+
+    if (data.type === 'welcome') {
+      subject = "Welcome to GolfBooker!";
+      html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #059669, #10b981); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to GolfBooker! ⛳</h1>
+          </div>
+          <div style="padding: 30px; background: #f9fafb;">
+            <h2 style="color: #374151;">Hello ${data.firstName},</h2>
+            <p style="color: #6b7280; line-height: 1.6;">
+              Thank you for creating your account with GolfBooker! We're excited to help you discover and book amazing golf experiences.
+            </p>
+            <p style="color: #6b7280; line-height: 1.6;">
+              Your account has been successfully created and you can now:
+            </p>
+            <ul style="color: #6b7280; line-height: 1.8;">
+              <li>Book tee times at premium golf courses</li>
+              <li>Manage your bookings and preferences</li>
+              <li>Access exclusive member benefits</li>
+              <li>Track your golf history</li>
+            </ul>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${req.headers.get('origin') || 'https://app.lovable.dev'}" 
+                 style="background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Start Booking
+              </a>
+            </div>
+            <p style="color: #6b7280; line-height: 1.6;">
+              Best regards,<br>
+              The GolfBooker Team
+            </p>
+          </div>
+        </div>
+      `;
+    } else {
+      // Booking confirmation
+      const bookingData = data.bookingDetails || data;
+      subject = "Golf Tee Time Booking Confirmation";
+      html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="color: #22c55e; margin-bottom: 10px;">⛳ Booking Confirmed!</h1>
@@ -29,17 +76,17 @@ serve(async (req) => {
           
           <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h2 style="color: #333; margin-top: 0;">Booking Details</h2>
-            <p><strong>Name:</strong> ${bookingData.firstName} ${bookingData.lastName}</p>
-            <p><strong>Date:</strong> ${new Date(bookingData.date).toLocaleDateString('en-US', {
+            <p><strong>Name:</strong> ${data.firstName} ${data.lastName}</p>
+            <p><strong>Date:</strong> ${bookingData.date ? new Date(bookingData.date).toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
               day: 'numeric'
-            })}</p>
-            <p><strong>Time Range:</strong> ${bookingData.earliestTime} - ${bookingData.latestTime}</p>
-            <p><strong>Players:</strong> ${bookingData.numberOfPlayers}</p>
-            <p><strong>Course:</strong> ${bookingData.preferredCourse}</p>
-            <p><strong>Total:</strong> $${bookingData.totalPrice}.00</p>
+            }) : bookingData.booking_date}</p>
+            <p><strong>Time Range:</strong> ${bookingData.earliestTime || bookingData.earliest_time} - ${bookingData.latestTime || bookingData.latest_time}</p>
+            <p><strong>Players:</strong> ${bookingData.numberOfPlayers || bookingData.number_of_players}</p>
+            <p><strong>Course:</strong> ${bookingData.preferredCourse || bookingData.preferred_course}</p>
+            <p><strong>Total:</strong> $${bookingData.totalPrice || bookingData.total_price}.00</p>
           </div>
           
           <div style="background: #e0f2fe; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -55,7 +102,14 @@ serve(async (req) => {
             Questions? Reply to this email or contact our support team.
           </p>
         </div>
-      `,
+      `;
+    }
+
+    const emailResponse = await resend.emails.send({
+      from: "GolfBooker <onboarding@resend.dev>",
+      to: [email],
+      subject,
+      html,
     });
 
     return new Response(JSON.stringify(emailResponse), {

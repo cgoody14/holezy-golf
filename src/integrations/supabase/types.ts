@@ -17,29 +17,49 @@ export type Database = {
       Client_Accounts: {
         Row: {
           created_at: string
+          default_payment_method_id: string | null
+          email: string | null
+          first_name: string | null
           id: number
+          last_name: string | null
+          phone: string | null
+          stripe_customer_id: string | null
           user_id: string | null
         }
         Insert: {
           created_at?: string
+          default_payment_method_id?: string | null
+          email?: string | null
+          first_name?: string | null
           id?: number
+          last_name?: string | null
+          phone?: string | null
+          stripe_customer_id?: string | null
           user_id?: string | null
         }
         Update: {
           created_at?: string
+          default_payment_method_id?: string | null
+          email?: string | null
+          first_name?: string | null
           id?: number
+          last_name?: string | null
+          phone?: string | null
+          stripe_customer_id?: string | null
           user_id?: string | null
         }
         Relationships: []
       }
       Client_Bookings: {
         Row: {
+          amount_charged: number | null
           booking_date: string | null
           booking_status: string | null
           cancelled: boolean | null
           cancelled_at: string | null
           client_id: number | null
           created_at: string
+          currency: string | null
           earliest_time: string | null
           email: string | null
           First: string | null
@@ -47,20 +67,24 @@ export type Database = {
           Last: string | null
           latest_time: string | null
           number_of_players: number | null
+          payment_status: string | null
           phone: string | null
           preferred_course: string | null
           promo_code: string | null
           stripe_payment_intent_id: string | null
+          stripe_payment_method_id: string | null
           total_price: number | null
           updated_at: string | null
         }
         Insert: {
+          amount_charged?: number | null
           booking_date?: string | null
           booking_status?: string | null
           cancelled?: boolean | null
           cancelled_at?: string | null
           client_id?: number | null
           created_at?: string
+          currency?: string | null
           earliest_time?: string | null
           email?: string | null
           First?: string | null
@@ -68,20 +92,24 @@ export type Database = {
           Last?: string | null
           latest_time?: string | null
           number_of_players?: number | null
+          payment_status?: string | null
           phone?: string | null
           preferred_course?: string | null
           promo_code?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
           total_price?: number | null
           updated_at?: string | null
         }
         Update: {
+          amount_charged?: number | null
           booking_date?: string | null
           booking_status?: string | null
           cancelled?: boolean | null
           cancelled_at?: string | null
           client_id?: number | null
           created_at?: string
+          currency?: string | null
           earliest_time?: string | null
           email?: string | null
           First?: string | null
@@ -89,10 +117,12 @@ export type Database = {
           Last?: string | null
           latest_time?: string | null
           number_of_players?: number | null
+          payment_status?: string | null
           phone?: string | null
           preferred_course?: string | null
           promo_code?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
           total_price?: number | null
           updated_at?: string | null
         }

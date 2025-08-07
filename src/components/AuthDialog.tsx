@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, Lock, User } from 'lucide-react';
+import { Loader2, Mail, Lock, User, Phone } from 'lucide-react';
 
 interface AuthDialogProps {
   isOpen: boolean;
@@ -18,7 +18,14 @@ interface AuthDialogProps {
 const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [signupData, setSignupData] = useState({ email: '', password: '', confirmPassword: '' });
+  const [signupData, setSignupData] = useState({ 
+    email: '', 
+    password: '', 
+    confirmPassword: '',
+    firstName: '',
+    lastName: '',
+    phone: ''
+  });
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -73,11 +80,30 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
         email: signupData.email,
         password: signupData.password,
         options: {
-          emailRedirectTo: redirectUrl
+          emailRedirectTo: redirectUrl,
+          data: {
+            first_name: signupData.firstName,
+            last_name: signupData.lastName,
+            phone: signupData.phone
+          }
         }
       });
 
       if (error) throw error;
+
+      // Send welcome email
+      try {
+        await supabase.functions.invoke('send-booking-confirmation', {
+          body: {
+            to: signupData.email,
+            firstName: signupData.firstName,
+            lastName: signupData.lastName,
+            type: 'welcome'
+          }
+        });
+      } catch (emailError) {
+        console.error('Welcome email failed:', emailError);
+      }
 
       toast({
         title: "Account created!",
@@ -156,6 +182,33 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
           
           <TabsContent value="signup" className="space-y-4">
             <form onSubmit={handleSignup} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-first-name">First Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="signup-first-name"
+                      placeholder="John"
+                      value={signupData.firstName}
+                      onChange={(e) => setSignupData(prev => ({ ...prev, firstName: e.target.value }))}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-last-name">Last Name</Label>
+                  <Input
+                    id="signup-last-name"
+                    placeholder="Doe"
+                    value={signupData.lastName}
+                    onChange={(e) => setSignupData(prev => ({ ...prev, lastName: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="signup-email">Email</Label>
                 <div className="relative">
@@ -171,6 +224,17 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="signup-phone">Phone (Optional)</Label>
+                <Input
+                  id="signup-phone"
+                  type="tel"
+                  placeholder="(555) 123-4567"
+                  value={signupData.phone}
+                  onChange={(e) => setSignupData(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
               
               <div className="space-y-2">
                 <Label htmlFor="signup-password">Password</Label>
@@ -183,6 +247,7 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                     value={signupData.password}
                     onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                     className="pl-10"
+                    minLength={6}
                     required
                   />
                 </div>
