@@ -18,14 +18,17 @@ export type Database = {
         Row: {
           created_at: string
           id: number
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           id?: number
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           id?: number
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -35,6 +38,7 @@ export type Database = {
           booking_status: string | null
           cancelled: boolean | null
           cancelled_at: string | null
+          client_id: number | null
           created_at: string
           earliest_time: string | null
           email: string | null
@@ -55,6 +59,7 @@ export type Database = {
           booking_status?: string | null
           cancelled?: boolean | null
           cancelled_at?: string | null
+          client_id?: number | null
           created_at?: string
           earliest_time?: string | null
           email?: string | null
@@ -75,6 +80,7 @@ export type Database = {
           booking_status?: string | null
           cancelled?: boolean | null
           cancelled_at?: string | null
+          client_id?: number | null
           created_at?: string
           earliest_time?: string | null
           email?: string | null
@@ -90,7 +96,15 @@ export type Database = {
           total_price?: number | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "Client_Bookings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "Client_Accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       Course_Database: {
         Row: {
