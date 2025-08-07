@@ -14,6 +14,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      Client_Accounts: {
+        Row: {
+          created_at: string
+          id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+        }
+        Relationships: []
+      }
       Client_Bookings: {
         Row: {
           booking_date: string | null
