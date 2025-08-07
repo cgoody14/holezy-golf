@@ -131,6 +131,35 @@ const Checkout = () => {
     setIsProcessing(true);
 
     try {
+      // Get current user session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to complete your booking",
+          variant: "destructive"
+        });
+        navigate('/auth');
+        return;
+      }
+
+      // Get client account ID
+      const { data: clientAccount, error: clientError } = await supabase
+        .from('Client_Accounts')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (clientError || !clientAccount) {
+        console.error('Client account error:', clientError);
+        toast({
+          title: "Account Error",
+          description: "Unable to find your client account. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Convert time to proper format for database
       const convertTo24Hour = (time12h: string) => {
         const [time, modifier] = time12h.split(' ');
@@ -146,6 +175,7 @@ const Checkout = () => {
 
       // Save booking to database
       const bookingRecord = {
+        client_id: clientAccount.id,
         First: bookingData.firstName,
         Last: bookingData.lastName,
         email: bookingData.email,
