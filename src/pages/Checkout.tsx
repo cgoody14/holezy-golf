@@ -136,9 +136,9 @@ const Checkout = () => {
       let clientAccountId: number | null = null;
       if (session?.user) {
         const { data: clientAccount, error: clientError } = await supabase
-          .from('Client_Accounts')
+          .from('accounts')
           .select('id')
-          .eq('user_id', session.user.id)
+          .eq('user_uuid', session.user.id)
           .maybeSingle();
         if (!clientError && clientAccount?.id) {
           clientAccountId = clientAccount.id;
@@ -162,7 +162,7 @@ const Checkout = () => {
       const lastFourDigits = cardNumber.replace(/\s/g, '').slice(-4);
       if (clientAccountId) {
         const { error: updateError } = await supabase
-          .from('Client_Accounts')
+          .from('accounts')
           .update({ 
             phone: bookingData.phone,
             email: bookingData.email,

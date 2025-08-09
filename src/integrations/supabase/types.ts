@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          created_at: string
+          default_payment_method_id: string | null
+          email: string | null
+          first_name: string | null
+          id: number
+          last_name: string | null
+          phone: string | null
+          stripe_customer_id: string | null
+          updated_at: string
+          user_uuid: string
+        }
+        Insert: {
+          created_at?: string
+          default_payment_method_id?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: number
+          last_name?: string | null
+          phone?: string | null
+          stripe_customer_id?: string | null
+          updated_at?: string
+          user_uuid: string
+        }
+        Update: {
+          created_at?: string
+          default_payment_method_id?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: number
+          last_name?: string | null
+          phone?: string | null
+          stripe_customer_id?: string | null
+          updated_at?: string
+          user_uuid?: string
+        }
+        Relationships: []
+      }
       Client_Accounts: {
         Row: {
           created_at: string
