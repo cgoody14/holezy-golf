@@ -276,6 +276,12 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
             </form>
           </TabsContent>
         </Tabs>
+        <div className="pt-2 text-center">
+          <p className="text-sm text-muted-foreground mb-2">Prefer not to sign in?</p>
+          <Button variant="ghost" onClick={() => { onSuccess(); onClose(); }}>
+            Continue as Guest
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -273,6 +273,15 @@ const Auth = () => {
                 </form>
               </TabsContent>
             </Tabs>
+            <div className="pt-4 text-center">
+              <p className="text-sm text-muted-foreground mb-2">Prefer not to sign in?</p>
+              <Button variant="ghost" onClick={() => {
+                const hasBooking = !!sessionStorage.getItem('bookingData');
+                navigate(hasBooking ? '/checkout' : '/book');
+              }}>
+                Continue as Guest
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

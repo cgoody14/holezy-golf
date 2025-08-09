@@ -84,15 +84,11 @@ const Navigation = () => {
             </Link>
             {user ? (
               <div className="flex items-center space-x-4">
-                <Link
-                  to="/profile"
-                  className={`font-medium transition-colors ${
-                    isActive('/profile') 
-                      ? 'text-primary border-b-2 border-primary pb-1' 
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Profile
+                <Link to="/profile" aria-label="Profile">
+                  <Button variant="ghost" size="icon">
+                    <User className="w-5 h-5" />
+                    <span className="sr-only">Profile</span>
+                  </Button>
                 </Link>
                 <Button
                   variant="outline"

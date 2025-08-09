@@ -131,33 +131,18 @@ const Checkout = () => {
     setIsProcessing(true);
 
     try {
-      // Get current user session
+      // Get current user session (guests allowed)
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to complete your booking",
-          variant: "destructive"
-        });
-        navigate('/auth');
-        return;
-      }
-
-      // Get client account ID
-      const { data: clientAccount, error: clientError } = await supabase
-        .from('Client_Accounts')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .single();
-
-      if (clientError || !clientAccount) {
-        console.error('Client account error:', clientError);
-        toast({
-          title: "Account Error",
-          description: "Unable to find your client account. Please try again.",
-          variant: "destructive"
-        });
-        return;
+      let clientAccountId: number | null = null;
+      if (session?.user) {
+        const { data: clientAccount, error: clientError } = await supabase
+          .from('Client_Accounts')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        if (!clientError && clientAccount?.id) {
+          clientAccountId = clientAccount.id;
+        }
       }
 
       // Convert time to proper format for database
@@ -173,25 +158,27 @@ const Checkout = () => {
         return `${hours.padStart(2, '0')}:${minutes}:00`;
       };
 
-      // Update client account with contact info and store payment method
+      // Update client account with contact info and store payment method (if signed in)
       const lastFourDigits = cardNumber.replace(/\s/g, '').slice(-4);
-      const { error: updateError } = await supabase
-        .from('Client_Accounts')
-        .update({ 
-          phone: bookingData.phone,
-          email: bookingData.email,
-          // Store encrypted payment info (in real app, use proper encryption)
-          default_payment_method_id: `card_****${lastFourDigits}`
-        })
-        .eq('id', clientAccount.id);
+      if (clientAccountId) {
+        const { error: updateError } = await supabase
+          .from('Client_Accounts')
+          .update({ 
+            phone: bookingData.phone,
+            email: bookingData.email,
+            // Store encrypted payment info (in real app, use proper encryption)
+            default_payment_method_id: `card_****${lastFourDigits}`
+          })
+          .eq('id', clientAccountId);
 
-      if (updateError) {
-        console.error('Failed to update client account:', updateError);
+        if (updateError) {
+          console.error('Failed to update client account:', updateError);
+        }
       }
 
       // Save booking to database with payment information
       const bookingRecord = {
-        client_id: clientAccount.id,
+        client_id: clientAccountId,
         First: bookingData.firstName,
         Last: bookingData.lastName,
         email: bookingData.email,
