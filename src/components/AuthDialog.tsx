@@ -46,6 +46,24 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
         description: "You've been signed in successfully.",
       });
 
+      // Ensure accounts row exists/updated
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user;
+      if (u) {
+        await supabase
+          .from('accounts')
+          .upsert(
+            {
+              user_uuid: u.id,
+              email: u.email,
+              first_name: (u.user_metadata as any)?.first_name,
+              last_name: (u.user_metadata as any)?.last_name,
+              phone: (u.user_metadata as any)?.phone
+            },
+            { onConflict: 'user_uuid' }
+          );
+      }
+
       onSuccess();
       onClose();
     } catch (error: any) {

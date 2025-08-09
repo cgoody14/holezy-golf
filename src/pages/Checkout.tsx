@@ -135,13 +135,35 @@ const Checkout = () => {
       const { data: { session } } = await supabase.auth.getSession();
       let clientAccountId: number | null = null;
       if (session?.user) {
+        // Try to find existing account
         const { data: clientAccount, error: clientError } = await supabase
           .from('accounts')
           .select('id')
           .eq('user_uuid', session.user.id)
           .maybeSingle();
+
         if (!clientError && clientAccount?.id) {
           clientAccountId = clientAccount.id;
+        } else {
+          // Create or fetch account row for this user
+          const { data: upserted, error: upsertError } = await supabase
+            .from('accounts')
+            .upsert(
+              {
+                user_uuid: session.user.id,
+                email: session.user.email,
+                first_name: bookingData.firstName,
+                last_name: bookingData.lastName,
+                phone: bookingData.phone
+              },
+              { onConflict: 'user_uuid' }
+            )
+            .select('id')
+            .single();
+
+          if (!upsertError && upserted?.id) {
+            clientAccountId = upserted.id;
+          }
         }
       }
 
