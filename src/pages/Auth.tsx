@@ -12,10 +12,11 @@ import { User, Lock, Mail } from 'lucide-react';
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+const [firstName, setFirstName] = useState('');
+const [lastName, setLastName] = useState('');
+const [username, setUsername] = useState('');
+const [phone, setPhone] = useState('');
+const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -71,7 +72,8 @@ const Auth = () => {
                 email: u.email,
                 first_name: (u.user_metadata as any)?.first_name,
                 last_name: (u.user_metadata as any)?.last_name,
-                phone: (u.user_metadata as any)?.phone
+                phone: (u.user_metadata as any)?.phone,
+                username: (u.user_metadata as any)?.username
               },
               { onConflict: 'user_id' }
             );
@@ -102,7 +104,8 @@ const Auth = () => {
           data: {
             first_name: firstName,
             last_name: lastName,
-            phone: phone
+            phone: phone,
+            username: username
           }
         }
       });
@@ -242,6 +245,16 @@ const Auth = () => {
                         required
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-username">Username</Label>
+                    <Input
+                      id="signup-username"
+                      placeholder="yourname"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-phone">Phone (Optional)</Label>

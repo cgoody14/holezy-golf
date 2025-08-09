@@ -24,6 +24,7 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
     confirmPassword: '',
     firstName: '',
     lastName: '',
+    username: '',
     phone: ''
   });
   const navigate = useNavigate();
@@ -58,7 +59,8 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
               email: u.email,
               first_name: (u.user_metadata as any)?.first_name,
               last_name: (u.user_metadata as any)?.last_name,
-              phone: (u.user_metadata as any)?.phone
+              phone: (u.user_metadata as any)?.phone,
+              username: (u.user_metadata as any)?.username
             },
             { onConflict: 'user_id' }
           );
@@ -102,7 +104,8 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
           data: {
             first_name: signupData.firstName,
             last_name: signupData.lastName,
-            phone: signupData.phone
+            phone: signupData.phone,
+            username: signupData.username
           }
         }
       });
@@ -225,6 +228,17 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="signup-username">Username</Label>
+                <Input
+                  id="signup-username"
+                  placeholder="yourname"
+                  value={signupData.username}
+                  onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
+                  required
+                />
               </div>
 
               <div className="space-y-2">
