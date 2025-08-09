@@ -137,9 +137,9 @@ const Checkout = () => {
       if (session?.user) {
         // Try to find existing account
         const { data: clientAccount, error: clientError } = await supabase
-          .from('accounts')
+          .from('Client_Accounts')
           .select('id')
-          .eq('user_uuid', session.user.id)
+          .eq('user_id', session.user.id)
           .maybeSingle();
 
         if (!clientError && clientAccount?.id) {
@@ -147,16 +147,16 @@ const Checkout = () => {
         } else {
           // Create or fetch account row for this user
           const { data: upserted, error: upsertError } = await supabase
-            .from('accounts')
+            .from('Client_Accounts')
             .upsert(
               {
-                user_uuid: session.user.id,
+                user_id: session.user.id,
                 email: session.user.email,
                 first_name: bookingData.firstName,
                 last_name: bookingData.lastName,
                 phone: bookingData.phone
               },
-              { onConflict: 'user_uuid' }
+              { onConflict: 'user_id' }
             )
             .select('id')
             .single();
@@ -184,7 +184,7 @@ const Checkout = () => {
       const lastFourDigits = cardNumber.replace(/\s/g, '').slice(-4);
       if (clientAccountId) {
         const { error: updateError } = await supabase
-          .from('accounts')
+          .from('Client_Accounts')
           .update({ 
             phone: bookingData.phone,
             email: bookingData.email,

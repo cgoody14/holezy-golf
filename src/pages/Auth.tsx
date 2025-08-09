@@ -64,16 +64,16 @@ const Auth = () => {
         const u = session?.user;
         if (u) {
           await supabase
-            .from('accounts')
+            .from('Client_Accounts')
             .upsert(
               {
-                user_uuid: u.id,
+                user_id: u.id,
                 email: u.email,
                 first_name: (u.user_metadata as any)?.first_name,
                 last_name: (u.user_metadata as any)?.last_name,
                 phone: (u.user_metadata as any)?.phone
               },
-              { onConflict: 'user_uuid' }
+              { onConflict: 'user_id' }
             );
         }
         navigate('/');
