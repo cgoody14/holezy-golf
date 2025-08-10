@@ -139,6 +139,29 @@ const [isLoading, setIsLoading] = useState(false);
           console.error('Welcome email failed:', emailError);
         }
 
+        // Attempt to create/update Client_Accounts immediately if session is available
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const u = session?.user;
+          if (u) {
+            await supabase
+              .from('Client_Accounts')
+              .upsert(
+                {
+                  user_id: u.id,
+                  email: u.email,
+                  first_name: firstName,
+                  last_name: lastName,
+                  phone: phone,
+                  username: username
+                },
+                { onConflict: 'user_id' }
+              );
+          }
+        } catch (accountErr) {
+          console.warn('Client_Accounts upsert after signup skipped:', accountErr);
+        }
+
         toast({
           title: "Account created!",
           description: "Please check your email to verify your account."

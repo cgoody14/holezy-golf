@@ -131,6 +131,29 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
         description: "Please check your email to verify your account.",
       });
 
+      // Attempt to create/update Client_Accounts immediately if session is available
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const u = session?.user;
+        if (u) {
+          await supabase
+            .from('Client_Accounts')
+            .upsert(
+              {
+                user_id: u.id,
+                email: signupData.email,
+                first_name: signupData.firstName,
+                last_name: signupData.lastName,
+                phone: signupData.phone,
+                username: signupData.username
+              },
+              { onConflict: 'user_id' }
+            );
+        }
+      } catch (accountErr) {
+        console.warn('Client_Accounts upsert after signup skipped:', accountErr);
+      }
+
       onSuccess();
       onClose();
     } catch (error: any) {
