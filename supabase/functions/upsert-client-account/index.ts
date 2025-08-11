@@ -54,24 +54,38 @@ serve(async (req) => {
     } as const;
 
     let result;
-    if (userId) {
-      // Upsert based on user_id when available
-      result = await supabase
-        .from("Client_Accounts")
-        .upsert(record, { onConflict: "user_id" })
-        .select("id, user_id")
-        .maybeSingle();
-    } else {
-      // Fallback upsert based on email (unique)
-      result = await supabase
-        .from("Client_Accounts")
-        .upsert(record, { onConflict: "email" })
-        .select("id, user_id")
-        .maybeSingle();
+    try {
+      if (userId) {
+        result = await supabase
+          .from("Client_Accounts")
+          .upsert(record, { onConflict: "user_id" })
+          .select("id, user_id")
+          .maybeSingle();
+      } else {
+        result = await supabase
+          .from("Client_Accounts")
+          .upsert(record, { onConflict: "email" })
+          .select("id, user_id")
+          .maybeSingle();
+      }
+
+      if (result.error) throw result.error;
+    } catch (err: any) {
+      // If FK violation on user_id, retry without user_id using email as conflict target
+      if (err?.code === '23503') {
+        const emailOnly = { ...record, user_id: null } as const;
+        result = await supabase
+          .from("Client_Accounts")
+          .upsert(emailOnly, { onConflict: "email" })
+          .select("id, user_id")
+          .maybeSingle();
+        if (result.error) throw result.error;
+      } else {
+        throw err;
+      }
     }
 
-    const { data, error } = result;
-    if (error) throw error;
+    const { data } = result;
 
     return new Response(JSON.stringify({ ok: true, data }), {
       status: 200,

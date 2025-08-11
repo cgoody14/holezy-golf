@@ -114,7 +114,7 @@ const [isLoading, setIsLoading] = useState(false);
       try {
         await supabase.functions.invoke('upsert-client-account', {
           body: {
-            userId: data?.user?.id ?? null,
+            userId: null,
             email,
             firstName,
             lastName,
@@ -154,6 +154,16 @@ const [isLoading, setIsLoading] = useState(false);
           });
         } catch (emailError) {
           console.error('Welcome email failed:', emailError);
+        }
+
+        // Try to sign in immediately so nav updates to Profile
+        try {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInErr) {
+            console.warn('Auto sign-in after signup failed:', signInErr.message);
+          }
+        } catch (autoErr) {
+          console.warn('Auto sign-in error:', autoErr);
         }
 
         // Attempt to create/update Client_Accounts immediately if session is available
