@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mail, Lock, User, Phone } from 'lucide-react';
+import OtpLogin from '@/components/auth/OtpLogin';
 
 interface AuthDialogProps {
   isOpen: boolean;
@@ -207,9 +208,10 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
         </DialogHeader>
 
         <Tabs defaultValue="login" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="login">Sign In</TabsTrigger>
             <TabsTrigger value="signup">Create Account</TabsTrigger>
+            <TabsTrigger value="code">Code</TabsTrigger>
           </TabsList>
           
           <TabsContent value="login" className="space-y-4">
@@ -355,6 +357,9 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                 Create Account
               </Button>
             </form>
+          </TabsContent>
+          <TabsContent value="code" className="space-y-4">
+            <OtpLogin onSuccess={() => { navigate('/profile'); onSuccess(); onClose(); }} />
           </TabsContent>
         </Tabs>
         <div className="pt-2 text-center">

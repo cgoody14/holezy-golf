@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { User, Lock, Mail } from 'lucide-react';
+import OtpLogin from '@/components/auth/OtpLogin';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -352,6 +353,9 @@ const [isLoading, setIsLoading] = useState(false);
                   </Button>
                 </form>
               </TabsContent>
+            <TabsContent value="code">
+              <OtpLogin onSuccess={() => navigate('/profile')} />
+            </TabsContent>
             </Tabs>
             <div className="pt-4 text-center">
               <p className="text-sm text-muted-foreground mb-2">Prefer not to sign in?</p>
