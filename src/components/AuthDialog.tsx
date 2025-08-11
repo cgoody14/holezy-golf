@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
@@ -233,9 +234,8 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                 <Label htmlFor="login-password">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
+                  <PasswordInput
                     id="login-password"
-                    type="password"
                     placeholder="Enter your password"
                     value={loginData.password}
                     onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
@@ -323,9 +323,8 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                 <Label htmlFor="signup-password">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
+                  <PasswordInput
                     id="signup-password"
-                    type="password"
                     placeholder="Create a password"
                     value={signupData.password}
                     onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
@@ -340,9 +339,8 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
                 <Label htmlFor="confirm-password">Confirm Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
+                  <PasswordInput
                     id="confirm-password"
-                    type="password"
                     placeholder="Confirm your password"
                     value={signupData.confirmPassword}
                     onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
