@@ -193,6 +193,7 @@ const [isLoading, setIsLoading] = useState(false);
           title: "Account created!",
           description: "Please check your email to verify your account."
         });
+        navigate('/profile');
       }
     } catch (error) {
       toast({
