@@ -1,1 +1,4 @@
 project_id = "azgnzhtqoyqlixfhlkyz"
+
+[functions.upsert-client-account]
+verify_jwt = false

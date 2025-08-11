@@ -96,7 +96,7 @@ const [isLoading, setIsLoading] = useState(false);
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -109,6 +109,23 @@ const [isLoading, setIsLoading] = useState(false);
           }
         }
       });
+
+      // Ensure account row is created even without session
+      try {
+        await supabase.functions.invoke('upsert-client-account', {
+          body: {
+            userId: data?.user?.id ?? null,
+            email,
+            firstName,
+            lastName,
+            phone,
+            username
+          }
+        });
+      } catch (upsertErr) {
+        console.warn('Edge upsert failed (signup):', upsertErr);
+      }
+
 
       if (error) {
         if (error.message.includes('already registered')) {

@@ -96,7 +96,7 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: signupData.email,
         password: signupData.password,
         options: {
@@ -109,6 +109,23 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
           }
         }
       });
+
+      // Ensure account row is created even without session
+      try {
+        await supabase.functions.invoke('upsert-client-account', {
+          body: {
+            userId: data?.user?.id ?? null,
+            email: signupData.email,
+            firstName: signupData.firstName,
+            lastName: signupData.lastName,
+            phone: signupData.phone,
+            username: signupData.username
+          }
+        });
+      } catch (upsertErr) {
+        console.warn('Edge upsert failed (signup dialog):', upsertErr);
+      }
+
 
       if (error) throw error;
 
