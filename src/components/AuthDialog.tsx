@@ -181,6 +181,7 @@ const AuthDialog = ({ isOpen, onClose, onSuccess }: AuthDialogProps) => {
         console.warn('Client_Accounts upsert after signup skipped:', accountErr);
       }
 
+      navigate('/profile');
       onSuccess();
       onClose();
     } catch (error: any) {
