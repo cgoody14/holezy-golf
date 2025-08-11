@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { User, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,7 @@ const Navigation = () => {
   const [user, setUser] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -30,21 +31,22 @@ const Navigation = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      toast({
-        title: "Signed out successfully",
-        description: "See you on the course!"
-      });
-    } catch (error) {
-      toast({
-        title: "Error signing out",
-        description: "Please try again",
-        variant: "destructive"
-      });
-    }
-  };
+const handleSignOut = async () => {
+  try {
+    await supabase.auth.signOut();
+    toast({
+      title: "Signed out successfully",
+      description: "See you on the course!"
+    });
+    navigate('/');
+  } catch (error) {
+    toast({
+      title: "Error signing out",
+      description: "Please try again",
+      variant: "destructive"
+    });
+  }
+};
 
   const isActive = (path: string) => location.pathname === path;
 
