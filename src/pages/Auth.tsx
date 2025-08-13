@@ -158,6 +158,19 @@ const [isLoading, setIsLoading] = useState(false);
           console.error('Welcome email failed:', emailError);
         }
 
+        // Send admin alert for new account
+        try {
+          await supabase.functions.invoke('send-admin-alert', {
+            body: {
+              type: 'account_created',
+              userEmail: email,
+              userName: `${firstName} ${lastName}`.trim()
+            }
+          });
+        } catch (alertError) {
+          console.error('Admin alert failed:', alertError);
+        }
+
         // Try to sign in immediately so nav updates to Profile
         try {
           const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });

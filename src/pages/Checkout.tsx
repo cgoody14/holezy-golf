@@ -258,6 +258,27 @@ const Checkout = () => {
         // Don't fail the booking if email fails
       }
 
+      // Send admin alert for new booking
+      try {
+        await supabase.functions.invoke('send-admin-alert', {
+          body: {
+            type: 'booking_made',
+            userEmail: bookingData.email,
+            userName: `${bookingData.firstName} ${bookingData.lastName}`,
+            bookingDetails: {
+              id: Date.now().toString(), // Use timestamp as ID for demo
+              course: bookingData.preferredCourse,
+              date: bookingData.date,
+              players: bookingData.numberOfPlayers,
+              totalPrice: calculateTotal()
+            }
+          }
+        });
+      } catch (alertError) {
+        console.error('Admin alert error:', alertError);
+        // Don't fail the booking if alert fails
+      }
+
       // Clear booking data from session storage
       sessionStorage.removeItem('bookingData');
       
