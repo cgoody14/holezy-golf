@@ -11,6 +11,8 @@ import BookingForm from "./pages/BookingForm";
 import Checkout from "./pages/Checkout";
 import Confirmation from "./pages/Confirmation";
 import Profile from "./pages/Profile";
+import Contact from "./pages/Contact";
+import FAQ from "./components/FAQ";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,8 @@ const App = () => (
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/confirmation" element={<Confirmation />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/faq" element={<div className="py-12 px-4"><FAQ /></div>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

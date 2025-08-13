@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, Users, MapPin } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Star, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import SignupCounter from '@/components/SignupCounter';
 import golfHeroImage from '@/assets/golf-hero.jpg';
 
 const Home = () => {
@@ -69,6 +70,91 @@ const Home = () => {
                 <p className="text-muted-foreground">
                   Sit back and relax. We'll secure your tee time and send you confirmation.
                 </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Social Proof Section */}
+      <section className="py-16 px-4 bg-muted/30">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Trusted by Golfers Everywhere
+            </h2>
+            <p className="text-xl text-muted-foreground">
+              Join thousands of satisfied golfers who've simplified their booking experience
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            <SignupCounter />
+            
+            <Card className="text-center golf-card-shadow">
+              <CardContent className="p-6">
+                <div className="flex justify-center mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-5 h-5 text-yellow-500 fill-current" />
+                  ))}
+                </div>
+                <div className="text-3xl font-bold text-primary mb-2">4.9/5</div>
+                <p className="text-muted-foreground font-medium">
+                  Average Customer Rating
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center golf-card-shadow">
+              <CardContent className="p-6">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Clock className="w-8 h-8 text-primary" />
+                </div>
+                <div className="text-3xl font-bold text-primary mb-2">2.3min</div>
+                <p className="text-muted-foreground font-medium">
+                  Average Booking Time
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Testimonials */}
+          <div className="grid md:grid-cols-2 gap-8">
+            <Card className="golf-card-shadow">
+              <CardContent className="p-6">
+                <Quote className="w-8 h-8 text-primary mb-4" />
+                <p className="text-lg mb-4 italic">
+                  "GolfBooker saved me so much time! No more calling around to different courses. 
+                  I just tell them when I want to play and they handle everything."
+                </p>
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                    <span className="text-primary font-semibold">MJ</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Mike Johnson</p>
+                    <p className="text-sm text-muted-foreground">Weekend Golfer</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="golf-card-shadow">
+              <CardContent className="p-6">
+                <Quote className="w-8 h-8 text-primary mb-4" />
+                <p className="text-lg mb-4 italic">
+                  "The convenience is incredible. I booked a last-minute foursome and they found 
+                  us a great time at a course I'd never heard of. Highly recommend!"
+                </p>
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                    <span className="text-primary font-semibold">SL</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Sarah Lee</p>
+                    <p className="text-sm text-muted-foreground">Golf Enthusiast</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

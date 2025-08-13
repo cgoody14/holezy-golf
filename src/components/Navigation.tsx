@@ -84,6 +84,26 @@ const handleSignOut = async () => {
             >
               Book a Tee Time
             </Link>
+            <Link
+              to="/faq"
+              className={`font-medium transition-colors ${
+                isActive('/faq') 
+                  ? 'text-primary border-b-2 border-primary pb-1' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              FAQ
+            </Link>
+            <Link
+              to="/contact"
+              className={`font-medium transition-colors ${
+                isActive('/contact') 
+                  ? 'text-primary border-b-2 border-primary pb-1' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Contact
+            </Link>
             {user ? (
               <div className="flex items-center space-x-4">
                 <Link to="/profile" aria-label="Profile">
@@ -144,6 +164,24 @@ const handleSignOut = async () => {
               onClick={() => setIsMenuOpen(false)}
             >
               Book a Tee Time
+            </Link>
+            <Link
+              to="/faq"
+              className={`block font-medium transition-colors ${
+                isActive('/faq') ? 'text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              FAQ
+            </Link>
+            <Link
+              to="/contact"
+              className={`block font-medium transition-colors ${
+                isActive('/contact') ? 'text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Contact
             </Link>
             {user ? (
               <>
