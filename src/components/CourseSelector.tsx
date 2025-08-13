@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Search, ChevronDown, MapPin, X, Plus, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -28,10 +29,12 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customCourse, setCustomCourse] = useState<CustomCourse>({ course_name: '', city: '', state: '' });
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { toast } = useToast();
 
   const pageSize = 50;
@@ -39,20 +42,38 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   // Filtered courses based on search term
   const filteredCourses = useMemo(() => {
     if (!searchTerm.trim()) {
-      const defaultCourses = courses.slice(0, Math.min(10, courses.length));
+      const defaultCourses = courses.slice(0, Math.min(15, courses.length));
       return [...defaultCourses, { course_name: 'Other', address: 'Type in your course if not found above' }];
     }
     
     const filtered = courses.filter(course =>
-      course.course_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      course.course_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      course.address?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     // Add "Other" option to filtered results
     return [...filtered, { course_name: 'Other', address: 'Type in your course if not found above' }];
   }, [courses, searchTerm]);
 
-  const loadCourses = async (pageNum: number = 0, reset: boolean = false, searchQuery?: string) => {
-    setIsLoading(true);
+  // Load recent searches from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('golfCourseSearches');
+    if (saved) {
+      try {
+        setRecentSearches(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error loading recent searches:', e);
+      }
+    }
+  }, []);
+
+  const loadCourses = useCallback(async (pageNum: number = 0, reset: boolean = false, searchQuery?: string) => {
+    if (searchQuery) {
+      setIsSearching(true);
+    } else {
+      setIsLoading(true);
+    }
+    
     try {
       const from = pageNum * pageSize;
       const to = from + pageSize - 1;
@@ -62,9 +83,11 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
         .select('course_name, address, facility_id')
         .not('course_name', 'is', null);
       
-      // Add search filter if provided
+      // Enhanced search - search in both course name and address
       if (searchQuery && searchQuery.trim()) {
-        query = query.ilike('course_name', `%${searchQuery.trim()}%`);
+        query = query.or(
+          `course_name.ilike.%${searchQuery.trim()}%,address.ilike.%${searchQuery.trim()}%`
+        );
       }
       
       const { data, error } = await query
@@ -90,8 +113,9 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       });
     } finally {
       setIsLoading(false);
+      setIsSearching(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadCourses(0, true);
@@ -105,6 +129,11 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       onCourseSelect(courseName);
       setSearchTerm(courseName);
       setShowCustomInput(false);
+      
+      // Save to recent searches
+      const updated = [courseName, ...recentSearches.filter(s => s !== courseName)].slice(0, 5);
+      setRecentSearches(updated);
+      localStorage.setItem('golfCourseSearches', JSON.stringify(updated));
     }
     setIsOpen(false);
   };
@@ -142,6 +171,13 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
     setShowCustomInput(false);
   };
 
+  const clearSelection = () => {
+    setSearchTerm('');
+    onCourseSelect('');
+    setShowCustomInput(false);
+    loadCourses(0, true);
+  };
+
   return (
     <div className="relative">
       {!showCustomInput ? (
@@ -149,21 +185,44 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search golf courses..."
+            placeholder="Search golf courses by name or location..."
             value={searchTerm}
             onChange={handleSearchChange}
             onFocus={() => setIsOpen(true)}
-            className="pl-10 pr-10"
+            className="pl-10 pr-20"
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-1 top-1 h-8 w-8 p-0"
-            onClick={() => setIsOpen(!isOpen)}
-          >
-            <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-          </Button>
+          <div className="absolute right-1 top-1 flex items-center space-x-1">
+            {selectedCourse && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={clearSelection}
+                title="Clear selection"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setIsOpen(!isOpen)}
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </Button>
+          </div>
+          
+          {selectedCourse && !isOpen && (
+            <div className="mt-2">
+              <Badge variant="secondary" className="flex items-center space-x-1 w-fit">
+                <MapPin className="h-3 w-3" />
+                <span className="truncate">{selectedCourse}</span>
+              </Badge>
+            </div>
+          )}
         </div>
       ) : (
         <Card className="p-4 space-y-3">
@@ -206,19 +265,62 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       )}
 
       {isOpen && !showCustomInput && (
-        <Card className="absolute top-full left-0 right-0 mt-1 z-50 max-h-80 overflow-hidden">
+        <Card className="absolute top-full left-0 right-0 mt-1 z-50 max-h-96 overflow-hidden bg-background shadow-lg border">
           <CardContent className="p-0">
-            <div className="max-h-80 overflow-y-auto">
-              <div className="p-3 text-xs text-muted-foreground bg-muted/50 border-b">
-                Can't find your course? Select "Other" to add it manually.
+            <div className="max-h-96 overflow-y-auto">
+              {/* Search status and tips */}
+              <div className="p-3 text-xs text-muted-foreground bg-muted/30 border-b">
+                {isSearching ? (
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Searching courses...</span>
+                  </div>
+                ) : searchTerm ? (
+                  `${filteredCourses.length - 1} courses found`
+                ) : (
+                  "Can't find your course? Select \"Other\" to add it manually."
+                )}
               </div>
-              {isLoading && courses.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  Loading courses...
+
+              {/* Recent searches */}
+              {!searchTerm && recentSearches.length > 0 && (
+                <div className="p-3 border-b bg-muted/10">
+                  <div className="text-xs font-medium text-muted-foreground mb-2">Recent Searches</div>
+                  <div className="flex flex-wrap gap-1">
+                    {recentSearches.map((recent, index) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        onClick={() => handleCourseSelect(recent)}
+                      >
+                        {recent}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              ) : filteredCourses.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  {searchTerm ? 'No courses found matching your search' : 'No courses available'}
+              )}
+
+              {/* Course list */}
+              {(isLoading && courses.length === 0) || isSearching ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <div className="flex items-center justify-center space-x-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading courses...</span>
+                  </div>
+                </div>
+              ) : filteredCourses.length === 1 && filteredCourses[0].course_name === 'Other' ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <div className="mb-3">
+                    <Search className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                  </div>
+                  <div className="text-sm">
+                    {searchTerm ? 'No courses found matching your search' : 'No courses available'}
+                  </div>
+                  <div className="text-xs text-muted-foreground/70 mt-1">
+                    Try a different search term or add your course manually
+                  </div>
                 </div>
               ) : (
                 <div className="divide-y">
@@ -226,26 +328,51 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                     <button
                       key={`${course.facility_id}-${index}`}
                       type="button"
-                      className="w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none"
+                      className={`w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none ${
+                        course.course_name === 'Other' ? 'bg-primary/5 border-t-2 border-primary/20' : ''
+                      }`}
                       onClick={() => handleCourseSelect(course.course_name)}
                     >
-                      <div className="font-medium">{course.course_name}</div>
-                      {course.address && (
-                        <div className="text-sm text-muted-foreground mt-1">
-                          {course.address}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium flex items-center space-x-2">
+                            {course.course_name === 'Other' ? (
+                              <>
+                                <Plus className="h-4 w-4 text-primary" />
+                                <span className="text-primary">Add Custom Course</span>
+                              </>
+                            ) : (
+                              <>
+                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                <span className="truncate">{course.course_name}</span>
+                              </>
+                            )}
+                          </div>
+                          {course.address && (
+                            <div className="text-sm text-muted-foreground mt-1 truncate">
+                              {course.address}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </button>
                   ))}
                   
-                  {hasMore && (
+                  {hasMore && searchTerm && (
                     <button
                       type="button"
-                      className="w-full p-3 text-center text-sm text-primary hover:bg-muted/50 transition-colors"
+                      className="w-full p-3 text-center text-sm text-primary hover:bg-muted/50 transition-colors disabled:opacity-50"
                       onClick={handleLoadMore}
                       disabled={isLoading}
                     >
-                      {isLoading ? 'Loading...' : 'Load more courses'}
+                      {isLoading ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Loading more...</span>
+                        </div>
+                      ) : (
+                        'Load more courses'
+                      )}
                     </button>
                   )}
                 </div>
