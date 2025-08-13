@@ -138,13 +138,58 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
     setIsOpen(false);
   };
 
-  const handleCustomCourseSubmit = () => {
+  const handleCustomCourseSubmit = async () => {
     if (customCourse.course_name && customCourse.city && customCourse.state) {
-      const customCourseName = `${customCourse.course_name} (${customCourse.city}, ${customCourse.state})`;
-      onCourseSelect(customCourseName);
-      setSearchTerm(customCourseName);
-      setShowCustomInput(false);
-      setCustomCourse({ course_name: '', city: '', state: '' });
+      try {
+        // Find the highest facility_id starting from a large number for user-added courses
+        const { data: existingCourses, error: fetchError } = await supabase
+          .from('Course_Database')
+          .select('facility_id')
+          .gte('facility_id', 900000) // Start user-added courses from 900000
+          .order('facility_id', { ascending: false })
+          .limit(1);
+
+        if (fetchError) throw fetchError;
+
+        let nextId = 900001; // Start from Other1 equivalent
+        if (existingCourses && existingCourses.length > 0) {
+          nextId = (existingCourses[0].facility_id || 900000) + 1;
+        }
+
+        const customCourseName = `${customCourse.course_name} (${customCourse.city}, ${customCourse.state})`;
+        
+        // Save to Course_Database
+        const { error: insertError } = await supabase
+          .from('Course_Database')
+          .insert({
+            facility_id: nextId,
+            course_name: customCourseName,
+            address: `${customCourse.city}, ${customCourse.state}`,
+            source: 'user_added'
+          });
+
+        if (insertError) throw insertError;
+
+        toast({
+          title: "Course added successfully",
+          description: `${customCourseName} has been added to our database`,
+        });
+
+        onCourseSelect(customCourseName);
+        setSearchTerm(customCourseName);
+        setShowCustomInput(false);
+        setCustomCourse({ course_name: '', city: '', state: '' });
+        
+        // Reload courses to include the new one
+        loadCourses(0, true);
+      } catch (error) {
+        console.error('Error saving custom course:', error);
+        toast({
+          title: "Error adding course",
+          description: "Please try again later",
+          variant: "destructive"
+        });
+      }
     }
   };
 
