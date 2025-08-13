@@ -48,6 +48,51 @@ const BookingForm = () => {
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     setUser(session?.user || null);
+    
+    // Auto-populate form with user data if logged in
+    if (session?.user) {
+      await populateUserData(session.user);
+    }
+  };
+
+  const populateUserData = async (user: any) => {
+    try {
+      // First try to get data from Client_Accounts table
+      const { data: clientAccount, error } = await supabase
+        .from('Client_Accounts')
+        .select('first_name, last_name, email, phone')
+        .eq('user_id', user.id)
+        .single();
+
+      if (clientAccount && !error) {
+        setFormData(prev => ({
+          ...prev,
+          firstName: clientAccount.first_name || '',
+          lastName: clientAccount.last_name || '',
+          email: clientAccount.email || user.email || '',
+          phone: clientAccount.phone || ''
+        }));
+      } else {
+        // Fallback to auth user data
+        setFormData(prev => ({
+          ...prev,
+          email: user.email || '',
+          firstName: user.user_metadata?.first_name || '',
+          lastName: user.user_metadata?.last_name || '',
+          phone: user.user_metadata?.phone || ''
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      // Fallback to auth user data
+      setFormData(prev => ({
+        ...prev,
+        email: user.email || '',
+        firstName: user.user_metadata?.first_name || '',
+        lastName: user.user_metadata?.last_name || '',
+        phone: user.user_metadata?.phone || ''
+      }));
+    }
   };
 
   const timeSlots = [
