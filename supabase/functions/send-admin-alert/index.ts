@@ -68,7 +68,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const emailResponse = await resend.emails.send({
       from: "Golf Booking Platform <onboarding@resend.dev>",
-      to: ["admin@yourdomain.com"], // Replace with your actual admin email address
+      to: ["christiangoodwin97@gmail.com"],
       subject: subject,
       html: htmlContent,
     });
