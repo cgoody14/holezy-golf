@@ -23,6 +23,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log("=== BOOKING CONFIRMATION EMAIL FUNCTION START ===");
+    
     const data: EmailRequest = await req.json();
     console.log("Received booking confirmation request:", JSON.stringify(data, null, 2));
     
@@ -36,6 +38,17 @@ serve(async (req) => {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
+
+    // Check if Resend API key is available
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      console.error("RESEND_API_KEY environment variable is not set");
+      return new Response(JSON.stringify({ error: "Email service not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    console.log("Resend API key found:", resendApiKey ? "YES" : "NO");
 
     let subject: string;
     let html: string;
