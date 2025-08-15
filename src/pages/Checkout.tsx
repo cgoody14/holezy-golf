@@ -243,18 +243,30 @@ const Checkout = () => {
       sessionStorage.setItem('confirmationData', JSON.stringify(confirmationData));
       
       // Send confirmation email
+      console.log('Attempting to send confirmation email to:', bookingData.email);
       try {
-        await supabase.functions.invoke('send-booking-confirmation', {
-          body: {
-            ...confirmationData,
-            type: 'booking_confirmation',
-            firstName: bookingData.firstName,
-            lastName: bookingData.lastName,
-            email: bookingData.email
-          }
+        const emailPayload = {
+          ...confirmationData,
+          type: 'booking_confirmation',
+          firstName: bookingData.firstName,
+          lastName: bookingData.lastName,
+          email: bookingData.email
+        };
+        console.log('Email payload:', emailPayload);
+        
+        const emailResponse = await supabase.functions.invoke('send-booking-confirmation', {
+          body: emailPayload
         });
+        
+        console.log('Email function response:', emailResponse);
+        
+        if (emailResponse.error) {
+          console.error('Email function returned error:', emailResponse.error);
+        } else {
+          console.log('Email sent successfully');
+        }
       } catch (emailError) {
-        console.error('Email error:', emailError);
+        console.error('Email error caught:', emailError);
         // Don't fail the booking if email fails
       }
 
