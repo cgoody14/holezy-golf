@@ -24,7 +24,18 @@ serve(async (req) => {
 
   try {
     const data: EmailRequest = await req.json();
+    console.log("Received booking confirmation request:", JSON.stringify(data, null, 2));
+    
     const email = data.to || data.email;
+    console.log("Extracted email:", email);
+    
+    if (!email) {
+      console.error("No email provided in request");
+      return new Response(JSON.stringify({ error: "Email is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
 
     let subject: string;
     let html: string;
@@ -105,12 +116,17 @@ serve(async (req) => {
       `;
     }
 
+    console.log(`Attempting to send email to: ${email}`);
+    console.log(`Subject: ${subject}`);
+
     const emailResponse = await resend.emails.send({
       from: "GolfBooker <onboarding@resend.dev>",
       to: [email],
       subject,
       html,
     });
+
+    console.log("Email sent successfully:", JSON.stringify(emailResponse, null, 2));
 
     return new Response(JSON.stringify(emailResponse), {
       status: 200,
