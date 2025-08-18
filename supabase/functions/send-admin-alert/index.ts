@@ -28,7 +28,11 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log("=== ADMIN ALERT FUNCTION START ===");
+    console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
+    
     const { type, userEmail, userName, bookingDetails }: AlertRequest = await req.json();
+    console.log("Admin alert request:", { type, userEmail, userName, bookingDetails });
     
     // Initialize Resend client with the API key
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
@@ -76,14 +80,17 @@ const handler = async (req: Request): Promise<Response> => {
       `;
     }
 
+    console.log("Attempting to send admin email to: christiangoodwin97@gmail.com");
+    console.log("Subject:", subject);
+
     const emailResponse = await resend.emails.send({
-      from: "Golf Booking Platform <onboarding@resend.dev>",
+      from: "onboarding@resend.dev",
       to: ["christiangoodwin97@gmail.com"],
       subject: subject,
       html: htmlContent,
     });
 
-    console.log("Admin alert sent successfully:", emailResponse);
+    console.log("Admin alert sent successfully:", JSON.stringify(emailResponse, null, 2));
 
     return new Response(JSON.stringify({ success: true, emailResponse }), {
       status: 200,

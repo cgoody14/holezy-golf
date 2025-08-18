@@ -22,6 +22,7 @@ serve(async (req) => {
 
   try {
     console.log("=== BOOKING CONFIRMATION EMAIL FUNCTION START ===");
+    console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
     
     const data: EmailRequest = await req.json();
     console.log("Received booking confirmation request:", JSON.stringify(data, null, 2));
@@ -132,9 +133,10 @@ serve(async (req) => {
 
     console.log(`Attempting to send email to: ${email}`);
     console.log(`Subject: ${subject}`);
+    console.log("From address: GolfBooker <onboarding@resend.dev>");
 
     const emailResponse = await resend.emails.send({
-      from: "GolfBooker <onboarding@resend.dev>",
+      from: "onboarding@resend.dev",
       to: [email],
       subject,
       html,
