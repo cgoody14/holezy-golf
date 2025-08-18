@@ -46,6 +46,11 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       return [...defaultCourses, { course_name: 'Other', address: 'Type in your course if not found above' }];
     }
     
+    // If user types "Other", only show the custom course option
+    if (searchTerm.toLowerCase().trim() === 'other') {
+      return [{ course_name: 'Other', address: 'Type in your course if not found above' }];
+    }
+    
     const filtered = courses.filter(course =>
       course.course_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course.address?.toLowerCase().includes(searchTerm.toLowerCase())
