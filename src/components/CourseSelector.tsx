@@ -51,8 +51,13 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       course.address?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
-    // Add "Other" option to filtered results
-    return [...filtered, { course_name: 'Other', address: 'Type in your course if not found above' }];
+    // Only add "Other" option if it's not already there (to avoid duplicates when searching "other")
+    const hasOtherOption = filtered.some(course => course.course_name === 'Other');
+    if (!hasOtherOption) {
+      return [...filtered, { course_name: 'Other', address: 'Type in your course if not found above' }];
+    }
+    
+    return filtered;
   }, [courses, searchTerm]);
 
   // Load recent searches from localStorage
@@ -356,15 +361,36 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                   </div>
                 </div>
               ) : filteredCourses.length === 1 && filteredCourses[0].course_name === 'Other' ? (
-                <div className="p-6 text-center text-muted-foreground">
-                  <div className="mb-3">
-                    <Search className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                <div>
+                  <div className="p-6 text-center text-muted-foreground">
+                    <div className="mb-3">
+                      <Search className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                    </div>
+                    <div className="text-sm">
+                      {searchTerm ? 'No courses found matching your search' : 'No courses available'}
+                    </div>
+                    <div className="text-xs text-muted-foreground/70 mt-1">
+                      Try a different search term or add your course manually
+                    </div>
                   </div>
-                  <div className="text-sm">
-                    {searchTerm ? 'No courses found matching your search' : 'No courses available'}
-                  </div>
-                  <div className="text-xs text-muted-foreground/70 mt-1">
-                    Try a different search term or add your course manually
+                  <div className="divide-y">
+                    <button
+                      type="button"
+                      className="w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none bg-primary/5 border-t-2 border-primary/20"
+                      onClick={() => handleCourseSelect('Other')}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium flex items-center space-x-2">
+                            <Plus className="h-4 w-4 text-primary" />
+                            <span className="text-primary">Add Custom Course</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1 truncate">
+                            Type in your course if not found above
+                          </div>
+                        </div>
+                      </div>
+                    </button>
                   </div>
                 </div>
               ) : (

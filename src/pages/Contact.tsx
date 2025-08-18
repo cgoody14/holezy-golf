@@ -108,41 +108,6 @@ const Contact = () => {
               </CardContent>
             </Card>
 
-            <Card className="golf-card-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Phone className="w-5 h-5 text-primary" />
-                  <span>Call Us</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-2">
-                  Monday - Friday, 8 AM - 6 PM EST
-                </p>
-                <a 
-                  href="tel:+1-555-GOLF-TEE" 
-                  className="text-primary hover:underline font-medium"
-                >
-                  (555) GOLF-TEE
-                </a>
-              </CardContent>
-            </Card>
-
-            <Card className="golf-card-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  <span>Office Location</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  123 Golf Drive<br />
-                  Fairway City, FC 12345<br />
-                  United States
-                </p>
-              </CardContent>
-            </Card>
 
             <div className="bg-primary/10 rounded-lg p-6">
               <h3 className="font-semibold mb-2">Quick Response Times</h3>
