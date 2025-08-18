@@ -2,8 +2,6 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -33,6 +31,18 @@ const handler = async (req: Request): Promise<Response> => {
     const { name, email, phone, subject, message }: ContactFormRequest = await req.json();
 
     console.log("Contact form submission:", { name, email, subject });
+
+    // Initialize Resend client with the API key
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      console.error("RESEND_API_KEY environment variable is not set");
+      return new Response(JSON.stringify({ error: "Email service not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    
+    const resend = new Resend(resendApiKey);
 
     // Store the message in the database
     const { error: dbError } = await supabase
