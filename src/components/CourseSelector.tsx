@@ -320,9 +320,9 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       )}
 
       {isOpen && !showCustomInput && (
-        <Card className="absolute top-full left-0 right-0 mt-1 z-50 max-h-96 overflow-hidden bg-background shadow-lg border">
+        <Card className="absolute top-full left-0 right-0 mt-1 z-50 max-h-[85vh] overflow-hidden bg-background shadow-lg border">
           <CardContent className="p-0">
-            <div className="max-h-96 overflow-y-auto">
+            <div className="max-h-[85vh] overflow-y-auto">
               {/* Search status and tips */}
               <div className="p-3 text-xs text-muted-foreground bg-muted/30 border-b">
                 {isSearching ? (
