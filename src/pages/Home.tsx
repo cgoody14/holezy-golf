@@ -143,8 +143,7 @@ const Home = () => {
               <CardContent className="p-6">
                 <Quote className="w-8 h-8 text-primary mb-4" />
                 <p className="text-lg mb-4 italic">
-                  "The convenience is incredible. I booked a last-minute foursome and they found 
-                  us a great time at a course I'd never heard of. Highly recommend!"
+                  "Booking tee times with friends is usually tough, but this service made it easy. We planned weeks ahead and had a stress-free day on the course together."
                 </p>
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
