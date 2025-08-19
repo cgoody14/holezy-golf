@@ -23,6 +23,7 @@ serve(async (req) => {
   try {
     console.log("=== BOOKING CONFIRMATION EMAIL FUNCTION START ===");
     console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
+    console.log("Available env vars:", Object.keys(Deno.env.toObject()));
     
     const data: EmailRequest = await req.json();
     console.log("Received booking confirmation request:", JSON.stringify(data, null, 2));
@@ -39,14 +40,14 @@ serve(async (req) => {
     }
 
     // Check if Resend API key is available
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    let resendApiKey = Deno.env.get("RESEND_API_KEY");
+    
+    // Fallback to hardcoded key if environment variable is not set
     if (!resendApiKey) {
-      console.error("RESEND_API_KEY environment variable is not set");
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      console.log("Using fallback API key");
+      resendApiKey = "re_UvtNNEAg_BRoYNCVaKNfZuKgBTdZzotuV";
     }
+    
     console.log("Resend API key found:", resendApiKey ? "YES" : "NO");
 
     // Initialize Resend client with the API key

@@ -30,18 +30,18 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log("=== ADMIN ALERT FUNCTION START ===");
     console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
+    console.log("Available env vars:", Object.keys(Deno.env.toObject()));
     
     const { type, userEmail, userName, bookingDetails }: AlertRequest = await req.json();
     console.log("Admin alert request:", { type, userEmail, userName, bookingDetails });
     
     // Initialize Resend client with the API key
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    let resendApiKey = Deno.env.get("RESEND_API_KEY");
+    
+    // Fallback to hardcoded key if environment variable is not set
     if (!resendApiKey) {
-      console.error("RESEND_API_KEY environment variable is not set");
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      console.log("Using fallback API key for admin alerts");
+      resendApiKey = "re_UvtNNEAg_BRoYNCVaKNfZuKgBTdZzotuV";
     }
     
     const resend = new Resend(resendApiKey);
