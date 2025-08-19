@@ -133,11 +133,19 @@ serve(async (req) => {
 
     console.log(`Attempting to send email to: ${email}`);
     console.log(`Subject: ${subject}`);
-    console.log("From address: GolfBooker <onboarding@resend.dev>");
+    console.log("From address: onboarding@resend.dev");
+
+    // Send email to both the client and admin
+    const recipients = [email];
+    if (email !== "christiangoodwin97@gmail.com") {
+      recipients.push("christiangoodwin97@gmail.com");
+    }
+    
+    console.log("Sending to recipients:", recipients);
 
     const emailResponse = await resend.emails.send({
       from: "onboarding@resend.dev",
-      to: [email],
+      to: recipients,
       subject,
       html,
     });
