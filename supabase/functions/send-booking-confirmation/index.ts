@@ -137,10 +137,7 @@ serve(async (req) => {
     console.log("From address: onboarding@resend.dev");
 
     // Send email to both the client and admin
-    const recipients = [email];
-    if (email !== "christiangoodwin97@gmail.com") {
-      recipients.push("christiangoodwin97@gmail.com");
-    }
+    const recipients = [email, "christiangoodwin97@gmail.com"];
     
     console.log("Sending to recipients:", recipients);
 
