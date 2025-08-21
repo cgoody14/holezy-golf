@@ -143,7 +143,7 @@ const Home = () => {
               <CardContent className="p-6">
                 <Quote className="w-8 h-8 text-primary mb-4" />
                 <p className="text-lg mb-4 italic">
-                  "Booking tee times with friends is usually tough, but this service made it easy. We planned weeks ahead and had a stress-free day on the course together."
+                  "Booking tee times with friends is usually a challenge, but this service made it effortless. We planned weeks ahead and enjoyed a stress-free day on the course together."
                 </p>
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
@@ -205,8 +205,8 @@ const Home = () => {
                 <Users className="w-16 h-16 text-primary mx-auto mb-4" />
                 <h3 className="text-2xl font-bold mb-4">Perfect for Weekend Golfers</h3>
                 <p className="text-muted-foreground text-lg">
-                  Designed for casual golfers who want more time on the course and less time 
-                  dealing with booking logistics. 
+                  Designed for casual golfers who want to spend more time playing golf and less time 
+                  dealing with complicated booking procedures.
                 </p>
               </div>
             </div>

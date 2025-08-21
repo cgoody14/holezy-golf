@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, Calendar, Clock, Users, MapPin, CreditCard, Mail } from 'lucide-react';
+import { CheckCircle, Calendar, Clock, Users, MapPin, CreditCard, Mail, Phone } from 'lucide-react';
 
 interface ConfirmationData {
   firstName: string;
@@ -143,6 +143,19 @@ const Confirmation = () => {
             {/* Payment Summary */}
             <div className="space-y-3">
               <h3 className="font-semibold text-lg">Payment Summary</h3>
+              
+              <div className="bg-muted/50 rounded-lg p-4 border border-border mb-4">
+                <h4 className="font-semibold text-sm mb-2 flex items-center space-x-2">
+                  <Phone className="w-4 h-4 text-primary" />
+                  <span>Important Cancellation Notice</span>
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  <strong>To cancel your tee time:</strong> You must call the golf course directly. 
+                  Our service only handles the initial booking request. The course manages all 
+                  cancellations according to their policy.
+                </p>
+              </div>
+              
               <div className="grid gap-2">
                 <div className="flex justify-between">
                   <span>Concierge Fee ({confirmationData.numberOfPlayers} × $5):</span>

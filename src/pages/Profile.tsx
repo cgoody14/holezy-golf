@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import CancellationDisclosureDialog from '@/components/CancellationDisclosureDialog';
 
 interface Booking {
   id: number;
@@ -42,6 +42,8 @@ const Profile = () => {
   const [user, setUser] = useState(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCancellationDialog, setShowCancellationDialog] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -81,6 +83,44 @@ const Profile = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCancelClick = (booking: Booking) => {
+    setBookingToCancel(booking);
+    setShowCancellationDialog(true);
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!bookingToCancel) return;
+
+    try {
+      const { error } = await supabase
+        .from('Client_Bookings')
+        .update({ 
+          booking_status: 'cancelled',
+          cancelled: true,
+          cancelled_at: new Date().toISOString()
+        })
+        .eq('id', bookingToCancel.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Booking Cancelled",
+        description: "Your booking has been cancelled. Please remember to call the golf course directly to confirm the cancellation."
+      });
+
+      setShowCancellationDialog(false);
+      setBookingToCancel(null);
+      loadBookings();
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      toast({
+        title: "Error cancelling booking",
+        description: "Please try again or contact support",
+        variant: "destructive"
+      });
     }
   };
 
@@ -299,36 +339,14 @@ const Profile = () => {
                         {/* Action Buttons */}
                         <div className="flex space-x-2">
                           {canCancelBooking(booking) && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <X className="w-4 h-4 mr-1" />
-                                  Cancel
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle className="flex items-center space-x-2">
-                                    <AlertCircle className="w-5 h-5 text-destructive" />
-                                    <span>Cancel Booking?</span>
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to cancel your booking for {booking.preferred_course} 
-                                    on {new Date(booking.booking_date).toLocaleDateString()}? 
-                                    This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Keep Booking</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleCancelBooking(booking.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Cancel Booking
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onClick={() => handleCancelClick(booking)}
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Cancel
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -339,6 +357,15 @@ const Profile = () => {
             )}
           </CardContent>
         </Card>
+
+        <CancellationDisclosureDialog
+          isOpen={showCancellationDialog}
+          onClose={() => {
+            setShowCancellationDialog(false);
+            setBookingToCancel(null);
+          }}
+          onConfirmCancel={handleCancelConfirm}
+        />
       </div>
     </div>
   );
