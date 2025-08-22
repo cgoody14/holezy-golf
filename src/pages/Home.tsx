@@ -205,8 +205,7 @@ const Home = () => {
                 <Users className="w-16 h-16 text-primary mx-auto mb-4" />
                 <h3 className="text-2xl font-bold mb-4">Perfect for Weekend Golfers</h3>
                 <p className="text-muted-foreground text-lg">
-                  Designed for casual golfers who want to spend more time playing golf and less time 
-                  dealing with complicated booking procedures.
+                  Designed for casual golfers who want stress-free tee times, whether it’s a weekend round or that trip you’ve been planning.
                 </p>
               </div>
             </div>
