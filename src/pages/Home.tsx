@@ -17,7 +17,7 @@ const Home = () => {
         <div className="absolute inset-0 bg-black/40" />
         <div className="relative max-w-4xl mx-auto text-center z-10">
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            Golf Made Simple
+            Tee Times Made Simple
           </h1>
           <p className="text-xl md:text-2xl mb-8 opacity-90">
             Tell us when and where you want to play, and we'll do the booking for you.
