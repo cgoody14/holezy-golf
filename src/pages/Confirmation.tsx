@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, Calendar, Clock, Users, MapPin, CreditCard, Mail, Phone } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ConfirmationData {
   firstName: string;
@@ -24,6 +25,7 @@ interface ConfirmationData {
 
 const Confirmation = () => {
   const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
+  const [courseAddress, setCourseAddress] = useState<string>('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,6 +34,25 @@ const Confirmation = () => {
     if (storedData) {
       const data = JSON.parse(storedData);
       setConfirmationData(data);
+      
+      // Fetch course address
+      const fetchCourseAddress = async () => {
+        try {
+          const { data: courseData, error } = await supabase
+            .from('Course_Database')
+            .select('address')
+            .eq('course_name', data.preferredCourse)
+            .single();
+          
+          if (!error && courseData?.address) {
+            setCourseAddress(courseData.address);
+          }
+        } catch (error) {
+          console.log('Course address not found');
+        }
+      };
+      
+      fetchCourseAddress();
     } else {
       // Redirect to home if no confirmation data
       navigate('/');
@@ -135,7 +156,12 @@ const Confirmation = () => {
                     <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
                     <span>Course:</span>
                   </span>
-                  <span className="font-medium text-right">{confirmationData.preferredCourse}</span>
+                  <div className="text-right flex-1">
+                    <div className="font-medium">{confirmationData.preferredCourse}</div>
+                    {courseAddress && (
+                      <div className="text-sm text-muted-foreground/70 mt-1">{courseAddress}</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -150,7 +176,7 @@ const Confirmation = () => {
                   <span>Important Cancellation Notice</span>
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  <strong>To cancel your tee time:</strong> You must call the golf course directly. 
+                  <strong>To cancel your tee time:</strong> If we have booked your tee time and you have received a confirmation, you must call the golf course directly to cancel. 
                   Our service only handles the initial booking request. The course manages all 
                   cancellations according to their policy.
                 </p>
