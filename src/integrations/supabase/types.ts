@@ -65,7 +65,9 @@ export type Database = {
           currency: string | null
           earliest_time: string | null
           email: string | null
+          facility_id: number | null
           First: string | null
+          has_online_booking: string | null
           id: number
           Last: string | null
           latest_time: string | null
@@ -90,7 +92,9 @@ export type Database = {
           currency?: string | null
           earliest_time?: string | null
           email?: string | null
+          facility_id?: number | null
           First?: string | null
+          has_online_booking?: string | null
           id?: number
           Last?: string | null
           latest_time?: string | null
@@ -115,7 +119,9 @@ export type Database = {
           currency?: string | null
           earliest_time?: string | null
           email?: string | null
+          facility_id?: number | null
           First?: string | null
+          has_online_booking?: string | null
           id?: number
           Last?: string | null
           latest_time?: string | null

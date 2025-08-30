@@ -198,6 +198,23 @@ const Checkout = () => {
         }
       }
 
+      // Fetch course details to get facility_id and online booking availability
+      let facilityId = null;
+      let hasOnlineBooking = null;
+      
+      if (bookingData.preferredCourse) {
+        const { data: courseData, error: courseError } = await supabase
+          .from('Course_Database')
+          .select('facility_id, tee_time_booking')
+          .eq('course_name', bookingData.preferredCourse)
+          .maybeSingle();
+        
+        if (!courseError && courseData) {
+          facilityId = courseData.facility_id;
+          hasOnlineBooking = courseData.tee_time_booking;
+        }
+      }
+
       // Save booking to database with payment information
       const bookingRecord = {
         client_id: clientAccountId,
@@ -210,6 +227,8 @@ const Checkout = () => {
         latest_time: convertTo24Hour(bookingData.latestTime),
         number_of_players: bookingData.numberOfPlayers,
         preferred_course: bookingData.preferredCourse,
+        facility_id: facilityId,
+        has_online_booking: hasOnlineBooking,
         booking_status: 'pending',
         total_price: calculateTotal(),
         promo_code: promoCode || null,
