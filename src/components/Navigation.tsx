@@ -4,6 +4,7 @@ import { User, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import teeBuddyLogo from '@/assets/tee-buddy-logo.png';
 
 const Navigation = () => {
   const [user, setUser] = useState(null);
@@ -56,10 +57,12 @@ const handleSignOut = async () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">⛳</span>
-            </div>
-            <span className="font-bold text-xl text-foreground">GolfBooker</span>
+            <img 
+              src={teeBuddyLogo} 
+              alt="Tee Buddy Logo" 
+              className="w-8 h-8 rounded-full"
+            />
+            <span className="font-bold text-xl text-foreground">Tee Buddy</span>
           </Link>
 
           {/* Desktop Navigation */}

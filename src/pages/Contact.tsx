@@ -100,10 +100,10 @@ const Contact = () => {
                   For general inquiries and support
                 </p>
                 <a 
-                  href="mailto:support@golfbooker.com" 
+                  href="mailto:support@teebuddy.com" 
                   className="text-primary hover:underline font-medium"
                 >
-                  support@golfbooker.com
+                  support@teebuddy.com
                 </a>
               </CardContent>
             </Card>
