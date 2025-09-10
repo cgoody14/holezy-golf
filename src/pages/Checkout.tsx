@@ -218,6 +218,7 @@ const Checkout = () => {
       // Save booking to database with payment information
       const bookingRecord = {
         client_id: clientAccountId,
+        user_id: session?.user?.id || null,
         First: bookingData.firstName,
         Last: bookingData.lastName,
         email: bookingData.email,

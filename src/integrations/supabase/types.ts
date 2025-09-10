@@ -80,6 +80,7 @@ export type Database = {
           stripe_payment_method_id: string | null
           total_price: number | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           amount_charged?: number | null
@@ -107,6 +108,7 @@ export type Database = {
           stripe_payment_method_id?: string | null
           total_price?: number | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           amount_charged?: number | null
@@ -134,6 +136,7 @@ export type Database = {
           stripe_payment_method_id?: string | null
           total_price?: number | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
