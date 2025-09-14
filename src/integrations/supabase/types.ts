@@ -190,31 +190,40 @@ export type Database = {
       }
       Course_Database: {
         Row: {
-          a: number | null
           address: string | null
+          address_link: string | null
+          booking_url: string | null
+          booking_window: string | null
           course_name: string | null
-          "Facility IDs": number
-          facility_id: number | null
+          course_website: string | null
+          facility_id: number
+          phone: string | null
           source: string | null
           tee_time_booking: string | null
           tee_times_url: string | null
         }
         Insert: {
-          a?: number | null
           address?: string | null
+          address_link?: string | null
+          booking_url?: string | null
+          booking_window?: string | null
           course_name?: string | null
-          "Facility IDs"?: number
-          facility_id?: number | null
+          course_website?: string | null
+          facility_id: number
+          phone?: string | null
           source?: string | null
           tee_time_booking?: string | null
           tee_times_url?: string | null
         }
         Update: {
-          a?: number | null
           address?: string | null
+          address_link?: string | null
+          booking_url?: string | null
+          booking_window?: string | null
           course_name?: string | null
-          "Facility IDs"?: number
-          facility_id?: number | null
+          course_website?: string | null
+          facility_id?: number
+          phone?: string | null
           source?: string | null
           tee_time_booking?: string | null
           tee_times_url?: string | null
