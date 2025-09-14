@@ -190,24 +190,30 @@ export type Database = {
       }
       Course_Database: {
         Row: {
+          a: number | null
           address: string | null
           course_name: string | null
+          "Facility IDs": number
           facility_id: number | null
           source: string | null
           tee_time_booking: string | null
           tee_times_url: string | null
         }
         Insert: {
+          a?: number | null
           address?: string | null
           course_name?: string | null
+          "Facility IDs"?: number
           facility_id?: number | null
           source?: string | null
           tee_time_booking?: string | null
           tee_times_url?: string | null
         }
         Update: {
+          a?: number | null
           address?: string | null
           course_name?: string | null
+          "Facility IDs"?: number
           facility_id?: number | null
           source?: string | null
           tee_time_booking?: string | null
