@@ -190,43 +190,43 @@ export type Database = {
       }
       Course_Database: {
         Row: {
-          address: string | null
-          address_link: string | null
-          booking_url: string | null
-          booking_window: string | null
-          course_name: string | null
-          course_website: string | null
-          facility_id: number
-          phone: string | null
-          source: string | null
-          tee_time_booking: string | null
-          tee_times_url: string | null
+          Address: string | null
+          "Address Link": string | null
+          "Booking URL": string | null
+          "Booking Window": string | null
+          "Course Name": string | null
+          "Course Website": string | null
+          "Facility ID": number
+          Phone: string | null
+          Source: string | null
+          "Tee Time Booking": string | null
+          "Tee Times URL": string | null
         }
         Insert: {
-          address?: string | null
-          address_link?: string | null
-          booking_url?: string | null
-          booking_window?: string | null
-          course_name?: string | null
-          course_website?: string | null
-          facility_id: number
-          phone?: string | null
-          source?: string | null
-          tee_time_booking?: string | null
-          tee_times_url?: string | null
+          Address?: string | null
+          "Address Link"?: string | null
+          "Booking URL"?: string | null
+          "Booking Window"?: string | null
+          "Course Name"?: string | null
+          "Course Website"?: string | null
+          "Facility ID": number
+          Phone?: string | null
+          Source?: string | null
+          "Tee Time Booking"?: string | null
+          "Tee Times URL"?: string | null
         }
         Update: {
-          address?: string | null
-          address_link?: string | null
-          booking_url?: string | null
-          booking_window?: string | null
-          course_name?: string | null
-          course_website?: string | null
-          facility_id?: number
-          phone?: string | null
-          source?: string | null
-          tee_time_booking?: string | null
-          tee_times_url?: string | null
+          Address?: string | null
+          "Address Link"?: string | null
+          "Booking URL"?: string | null
+          "Booking Window"?: string | null
+          "Course Name"?: string | null
+          "Course Website"?: string | null
+          "Facility ID"?: number
+          Phone?: string | null
+          Source?: string | null
+          "Tee Time Booking"?: string | null
+          "Tee Times URL"?: string | null
         }
         Relationships: []
       }
