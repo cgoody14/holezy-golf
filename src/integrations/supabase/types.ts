@@ -196,7 +196,7 @@ export type Database = {
           "Booking Window": string | null
           "Course Name": string | null
           "Course Website": string | null
-          "Facility ID": number | null
+          "Facility ID": number
           Phone: string | null
           Source: string | null
           "Tee Time Booking": string | null
@@ -209,7 +209,7 @@ export type Database = {
           "Booking Window"?: string | null
           "Course Name"?: string | null
           "Course Website"?: string | null
-          "Facility ID"?: number | null
+          "Facility ID": number
           Phone?: string | null
           Source?: string | null
           "Tee Time Booking"?: string | null
@@ -222,7 +222,7 @@ export type Database = {
           "Booking Window"?: string | null
           "Course Name"?: string | null
           "Course Website"?: string | null
-          "Facility ID"?: number | null
+          "Facility ID"?: number
           Phone?: string | null
           Source?: string | null
           "Tee Time Booking"?: string | null
