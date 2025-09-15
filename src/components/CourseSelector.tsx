@@ -340,7 +340,17 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
               {/* Recent searches */}
               {!searchTerm && recentSearches.length > 0 && (
                 <div className="p-3 border-b bg-muted/10">
-                  <div className="text-xs font-medium text-muted-foreground mb-2">Recent Searches</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-muted-foreground">Recent Searches</div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 text-xs text-muted-foreground hover:text-destructive px-1"
+                      onClick={() => setRecentSearches([])}
+                    >
+                      Clear
+                    </Button>
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {recentSearches.map((recent, index) => (
                       <Button
