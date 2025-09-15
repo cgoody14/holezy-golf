@@ -40,12 +40,12 @@ const Confirmation = () => {
         try {
           const { data: courseData, error } = await supabase
             .from('Course_Database')
-            .select('address')
-            .eq('course_name', data.preferredCourse)
+            .select('"Address"')
+            .eq('"Course Name"', data.preferredCourse)
             .single();
           
-          if (!error && courseData?.address) {
-            setCourseAddress(courseData.address);
+          if (!error && courseData?.["Address"]) {
+            setCourseAddress(courseData["Address"]);
           }
         } catch (error) {
           console.log('Course address not found');

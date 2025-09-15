@@ -8,13 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface Course {
-  course_name: string;
-  address?: string;
-  facility_id?: number;
+  "Course Name": string;
+  "Address"?: string;
+  "Facility ID"?: number;
 }
 
 interface CustomCourse {
-  course_name: string;
+  "Course Name": string;
   city: string;
   state: string;
 }
@@ -33,7 +33,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [customCourse, setCustomCourse] = useState<CustomCourse>({ course_name: '', city: '', state: '' });
+  const [customCourse, setCustomCourse] = useState<CustomCourse>({ "Course Name": '', city: '', state: '' });
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -43,23 +43,23 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   const filteredCourses = useMemo(() => {
     if (!searchTerm.trim()) {
       const defaultCourses = courses.slice(0, Math.min(15, courses.length));
-      return [...defaultCourses, { course_name: 'Other', address: 'Type in your course if not found above' }];
+      return [...defaultCourses, { "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
     }
     
     // If user types "Other", only show the custom course option
     if (searchTerm.toLowerCase().trim() === 'other') {
-      return [{ course_name: 'Other', address: 'Type in your course if not found above' }];
+      return [{ "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
     }
     
     const filtered = courses.filter(course =>
-      course.course_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.address?.toLowerCase().includes(searchTerm.toLowerCase())
+      course["Course Name"]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      course["Address"]?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     // Only add "Other" option if it's not already there (to avoid duplicates when searching "other")
-    const hasOtherOption = filtered.some(course => course.course_name === 'Other');
+    const hasOtherOption = filtered.some(course => course["Course Name"] === 'Other');
     if (!hasOtherOption) {
-      return [...filtered, { course_name: 'Other', address: 'Type in your course if not found above' }];
+      return [...filtered, { "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
     }
     
     return filtered;
@@ -90,18 +90,18 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
       
       let query = supabase
         .from('Course_Database')
-        .select('course_name, address, facility_id')
-        .not('course_name', 'is', null);
+        .select('"Course Name", "Address", "Facility ID"')
+        .not('"Course Name"', 'is', null);
       
       // Enhanced search - search in both course name and address
       if (searchQuery && searchQuery.trim()) {
         query = query.or(
-          `course_name.ilike.%${searchQuery.trim()}%,address.ilike.%${searchQuery.trim()}%`
+          `"Course Name".ilike.%${searchQuery.trim()}%,"Address".ilike.%${searchQuery.trim()}%`
         );
       }
       
       const { data, error } = await query
-        .order('course_name')
+        .order('"Course Name"')
         .range(from, to);
 
       if (error) throw error;
@@ -149,12 +149,12 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   };
 
   const handleCustomCourseSubmit = async () => {
-    if (customCourse.course_name && customCourse.city && customCourse.state) {
+    if (customCourse["Course Name"] && customCourse.city && customCourse.state) {
       try {
         // Find the highest facility_id starting from a large number for user-added courses
         const { data: existingCourses, error: fetchError } = await supabase
           .from('Course_Database')
-          .select('facility_id')
+          .select('"Facility ID"')
           .gte('facility_id', 900000) // Start user-added courses from 900000
           .order('facility_id', { ascending: false })
           .limit(1);
@@ -163,18 +163,18 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
 
         let nextId = 900001; // Start from Other1 equivalent
         if (existingCourses && existingCourses.length > 0) {
-          nextId = (existingCourses[0].facility_id || 900000) + 1;
+          nextId = (existingCourses[0]["Facility ID"] || 900000) + 1;
         }
 
-        const customCourseName = `${customCourse.course_name} (${customCourse.city}, ${customCourse.state})`;
+        const customCourseName = `${customCourse["Course Name"]} (${customCourse.city}, ${customCourse.state})`;
         
         // Save to Course_Database
         const { error: insertError } = await supabase
           .from('Course_Database')
           .insert({
-            facility_id: nextId,
-            course_name: customCourseName,
-            address: `${customCourse.city}, ${customCourse.state}`,
+            "Facility ID": nextId,
+            "Course Name": customCourseName,
+            "Address": `${customCourse.city}, ${customCourse.state}`,
             source: 'user_added'
           });
 
@@ -188,7 +188,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
         onCourseSelect(customCourseName);
         setSearchTerm(customCourseName);
         setShowCustomInput(false);
-        setCustomCourse({ course_name: '', city: '', state: '' });
+        setCustomCourse({ "Course Name": '', city: '', state: '' });
         
         // Reload courses to include the new one
         loadCourses(0, true);
@@ -285,8 +285,8 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
           <div className="space-y-2">
             <Input
               placeholder="Golf course name"
-              value={customCourse.course_name}
-              onChange={(e) => setCustomCourse(prev => ({ ...prev, course_name: e.target.value }))}
+              value={customCourse["Course Name"]}
+              onChange={(e) => setCustomCourse(prev => ({ ...prev, "Course Name": e.target.value }))}
             />
             <div className="grid grid-cols-2 gap-2">
               <Input
@@ -310,7 +310,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
               size="sm"
               onClick={() => {
                 setShowCustomInput(false);
-                setCustomCourse({ course_name: '', city: '', state: '' });
+                setCustomCourse({ "Course Name": '', city: '', state: '' });
               }}
             >
               Cancel
@@ -365,7 +365,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                     <span>Loading courses...</span>
                   </div>
                 </div>
-              ) : filteredCourses.length === 1 && filteredCourses[0].course_name === 'Other' ? (
+              ) : filteredCourses.length === 1 && filteredCourses[0]["Course Name"] === 'Other' ? (
                 <div>
                   <div className="p-6 text-center text-muted-foreground">
                     <div className="mb-3">
@@ -402,17 +402,17 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                 <div className="divide-y">
                   {filteredCourses.map((course, index) => (
                     <button
-                      key={`${course.facility_id}-${index}`}
+                      key={`${course["Facility ID"]}-${index}`}
                       type="button"
                       className={`w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none ${
-                        course.course_name === 'Other' ? 'bg-primary/5 border-t-2 border-primary/20' : ''
+                        course["Course Name"] === 'Other' ? 'bg-primary/5 border-t-2 border-primary/20' : ''
                       }`}
-                      onClick={() => handleCourseSelect(course.course_name)}
+                      onClick={() => handleCourseSelect(course["Course Name"])}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="font-medium flex items-center space-x-2">
-                            {course.course_name === 'Other' ? (
+                            {course["Course Name"] === 'Other' ? (
                               <>
                                 <Plus className="h-4 w-4 text-primary" />
                                 <span className="text-primary">Add Custom Course</span>
@@ -420,13 +420,13 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                             ) : (
                               <>
                                 <MapPin className="h-3 w-3 text-muted-foreground" />
-                                <span className="truncate">{course.course_name}</span>
+                                <span className="truncate">{course["Course Name"]}</span>
                               </>
                             )}
                           </div>
-                          {course.address && (
+                          {course["Address"] && (
                             <div className="text-sm text-muted-foreground mt-1 truncate">
-                              {course.address}
+                              {course["Address"]}
                             </div>
                           )}
                         </div>

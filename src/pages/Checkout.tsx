@@ -203,15 +203,22 @@ const Checkout = () => {
       let hasOnlineBooking = null;
       
       if (bookingData.preferredCourse) {
-        const { data: courseData, error: courseError } = await supabase
-          .from('Course_Database')
-          .select('facility_id, tee_time_booking')
-          .eq('course_name', bookingData.preferredCourse)
-          .maybeSingle();
+        try {
+          const courseResponse = await (supabase as any)
+            .from('Course_Database')
+            .select('"Facility ID", "Tee Time Booking"')
+            .eq('"Course Name"', bookingData.preferredCourse)
+            .maybeSingle();
+          
+          const courseData = courseResponse.data;
+          const courseError = courseResponse.error;
         
         if (!courseError && courseData) {
-          facilityId = courseData.facility_id;
-          hasOnlineBooking = courseData.tee_time_booking;
+          facilityId = courseData["Facility ID"];
+          hasOnlineBooking = courseData["Tee Time Booking"];
+        }
+        } catch (error) {
+          console.log('Error fetching course data:', error);
         }
       }
 
