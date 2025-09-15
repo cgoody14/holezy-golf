@@ -190,6 +190,7 @@ export type Database = {
       }
       Course_Database: {
         Row: {
+          "12_Key": number | null
           Address: string | null
           "Address Link": string | null
           "Booking URL": string | null
@@ -197,12 +198,16 @@ export type Database = {
           "Course Name": string | null
           "Course Website": string | null
           "Facility ID": number
+          ID_Key: number | null
+          ida: number | null
+          num: number | null
           Phone: string | null
           Source: string | null
           "Tee Time Booking": string | null
           "Tee Times URL": string | null
         }
         Insert: {
+          "12_Key"?: number | null
           Address?: string | null
           "Address Link"?: string | null
           "Booking URL"?: string | null
@@ -210,12 +215,16 @@ export type Database = {
           "Course Name"?: string | null
           "Course Website"?: string | null
           "Facility ID": number
+          ID_Key?: number | null
+          ida?: number | null
+          num?: number | null
           Phone?: string | null
           Source?: string | null
           "Tee Time Booking"?: string | null
           "Tee Times URL"?: string | null
         }
         Update: {
+          "12_Key"?: number | null
           Address?: string | null
           "Address Link"?: string | null
           "Booking URL"?: string | null
@@ -223,6 +232,9 @@ export type Database = {
           "Course Name"?: string | null
           "Course Website"?: string | null
           "Facility ID"?: number
+          ID_Key?: number | null
+          ida?: number | null
+          num?: number | null
           Phone?: string | null
           Source?: string | null
           "Tee Time Booking"?: string | null
