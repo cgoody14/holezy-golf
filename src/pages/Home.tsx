@@ -124,7 +124,7 @@ const Home = () => {
               <CardContent className="p-6">
                 <Quote className="w-8 h-8 text-primary mb-4" />
                 <p className="text-lg mb-4 italic">
-                  "TeeTimeHQ saved me so much time! No more calling around to different courses. 
+                  "Holezy saved me so much time! No more calling around to different courses. 
                   I just tell them when I want to play and they handle everything."
                 </p>
                 <div className="flex items-center space-x-3">

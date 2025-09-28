@@ -59,10 +59,10 @@ const handleSignOut = async () => {
           <Link to="/" className="flex items-center space-x-2">
             <img 
               src={teeTimeHQLogo} 
-              alt="TeeTimeHQ Logo" 
+              alt="Holezy Logo" 
               className="w-8 h-8 rounded-full"
             />
-            <span className="font-bold text-xl text-foreground">TeeTimeHQ</span>
+            <span className="font-bold text-xl text-foreground">Holezy</span>
           </Link>
 
           {/* Desktop Navigation */}
