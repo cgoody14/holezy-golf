@@ -4,7 +4,7 @@ import { User, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import teeTimeHQLogo from '@/assets/teetimehq-logo.png';
+import holezyLogo from '@/assets/holezy-logo.png';
 
 const Navigation = () => {
   const [user, setUser] = useState(null);
@@ -58,7 +58,7 @@ const handleSignOut = async () => {
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
             <img 
-              src={teeTimeHQLogo} 
+              src={holezyLogo} 
               alt="Holezy Logo" 
               className="w-8 h-8 rounded-full"
             />
