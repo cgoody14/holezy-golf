@@ -38,7 +38,7 @@ const Confirmation = () => {
       // Fetch course address
       const fetchCourseAddress = async () => {
         try {
-          const { data: courseData, error } = await supabase
+          const { data: courseData, error } = await (supabase as any)
             .from('Course_Database')
             .select('"Address"')
             .eq('"Course Name"', data.preferredCourse)

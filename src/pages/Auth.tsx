@@ -228,7 +228,7 @@ const [isLoading, setIsLoading] = useState(false);
           <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-primary-foreground text-2xl">⛳</span>
           </div>
-          <h1 className="text-3xl font-bold">Welcome to Tee Buddy</h1>
+          <h1 className="text-3xl font-bold">Welcome to TeeTimeHQ</h1>
           <p className="text-muted-foreground mt-2">Sign in or create an account to manage your bookings</p>
         </div>
 
