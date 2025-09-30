@@ -100,10 +100,10 @@ const Contact = () => {
                   For general inquiries and support
                 </p>
                 <a 
-                  href="mailto:support@teebuddy.com" 
+                  href="mailto:bookings@holezygolf.com" 
                   className="text-primary hover:underline font-medium"
                 >
-                  support@teebuddy.com
+                  bookings@holezygolf.com
                 </a>
               </CardContent>
             </Card>
