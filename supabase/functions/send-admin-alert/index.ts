@@ -80,12 +80,12 @@ const handler = async (req: Request): Promise<Response> => {
       `;
     }
 
-    console.log("Attempting to send admin email to: christiangoodwin97@gmail.com");
+    console.log("Attempting to send admin email to: support@holezygolf.com");
     console.log("Subject:", subject);
 
     const emailResponse = await resend.emails.send({
       from: "onboarding@resend.dev",
-      to: ["christiangoodwin97@gmail.com"],
+      to: ["support@holezygolf.com"],
       subject: subject,
       html: htmlContent,
     });
