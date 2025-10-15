@@ -2,3 +2,9 @@ project_id = "azgnzhtqoyqlixfhlkyz"
 
 [functions.upsert-client-account]
 verify_jwt = false
+
+[functions.create-payment-intent]
+verify_jwt = false
+
+[functions.capture-payment]
+verify_jwt = false

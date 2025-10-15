@@ -6,109 +6,67 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { CreditCard, Calendar, Clock, Users, MapPin, Tag, Shield } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Tag, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { loadStripe, StripeCardElement } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import type { BookingData } from './BookingForm';
 
-const Checkout = () => {
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
+const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const stripe = useStripe();
+  const elements = useElements();
   
-  const [bookingData, setBookingData] = useState<BookingData | null>(null);
   const [promoCode, setPromoCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Credit card form fields
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [cardName, setCardName] = useState('');
-
-  useEffect(() => {
-    // Get booking data from session storage
-    const storedData = sessionStorage.getItem('bookingData');
-    if (storedData) {
-      const data = JSON.parse(storedData);
-      setBookingData(data);
-      setCardName(`${data.firstName} ${data.lastName}`);
-    } else {
-      // Redirect back to booking form if no data
-      navigate('/book');
-    }
-  }, [navigate]);
+  const [clientSecret, setClientSecret] = useState<string>('');
+  const [paymentIntentId, setPaymentIntentId] = useState<string>('');
+  const [customerId, setCustomerId] = useState<string>('');
 
   const calculateTotal = () => {
-    if (!bookingData) return 0;
     return bookingData.numberOfPlayers * 5; // $5 per player
   };
 
-  const formatCardNumber = (value: string) => {
-    // Remove all non-digit characters
-    const cleanValue = value.replace(/\D/g, '');
-    // Add spaces every 4 digits
-    const formatted = cleanValue.replace(/(\d{4})(?=\d)/g, '$1 ');
-    return formatted.substring(0, 19); // Max 16 digits + 3 spaces
-  };
+  useEffect(() => {
+    // Create PaymentIntent on component mount
+    const createPaymentIntent = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+          body: {
+            amount: calculateTotal(),
+            email: bookingData.email,
+            name: `${bookingData.firstName} ${bookingData.lastName}`
+          }
+        });
 
-  const formatExpiryDate = (value: string) => {
-    // Remove all non-digit characters
-    const cleanValue = value.replace(/\D/g, '');
-    // Add slash after first 2 digits
-    if (cleanValue.length >= 2) {
-      return cleanValue.substring(0, 2) + '/' + cleanValue.substring(2, 4);
-    }
-    return cleanValue;
-  };
+        if (error) throw error;
 
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCardNumber(e.target.value);
-    setCardNumber(formatted);
-  };
+        setClientSecret(data.clientSecret);
+        setPaymentIntentId(data.paymentIntentId);
+        setCustomerId(data.customerId);
+      } catch (error) {
+        console.error('Error creating payment intent:', error);
+        toast({
+          title: "Payment Setup Failed",
+          description: "Unable to initialize payment. Please try again.",
+          variant: "destructive"
+        });
+      }
+    };
 
-  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatExpiryDate(e.target.value);
-    setExpiryDate(formatted);
-  };
+    createPaymentIntent();
+  }, [bookingData, toast]);
 
-  const validateForm = () => {
-    if (!bookingData) return false;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!cardNumber.replace(/\s/g, '') || cardNumber.replace(/\s/g, '').length < 13) {
-      toast({
-        title: "Invalid Card Number",
-        description: "Please enter a valid credit card number",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    if (!expiryDate || expiryDate.length < 5) {
-      toast({
-        title: "Invalid Expiry Date",
-        description: "Please enter a valid expiry date (MM/YY)",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    if (!cvv || cvv.length < 3) {
-      toast({
-        title: "Invalid CVV",
-        description: "Please enter a valid CVV code",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    if (!cardName.trim()) {
-      toast({
-        title: "Missing Name",
-        description: "Please enter the name on your card",
-        variant: "destructive"
-      });
-      return false;
+    if (!stripe || !elements || !clientSecret) {
+      return;
     }
 
     if (!termsAccepted) {
@@ -117,36 +75,55 @@ const Checkout = () => {
         description: "Please accept the terms and conditions to continue",
         variant: "destructive"
       });
-      return false;
+      return;
     }
-
-    return true;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm() || !bookingData) return;
 
     setIsProcessing(true);
 
     try {
+      const cardElement = elements.getElement(CardElement) as StripeCardElement;
+      if (!cardElement) throw new Error('Card element not found');
+
+      // Confirm the payment (this authorizes the card)
+      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+        clientSecret,
+        {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: `${bookingData.firstName} ${bookingData.lastName}`,
+              email: bookingData.email,
+              phone: bookingData.phone,
+            },
+          },
+        }
+      );
+
+      if (confirmError) {
+        throw new Error(confirmError.message);
+      }
+
+      if (paymentIntent.status !== 'requires_capture') {
+        throw new Error('Payment authorization failed');
+      }
+
       // Get current user session (guests allowed)
       const { data: { session } } = await supabase.auth.getSession();
       let clientAccountId: number | null = null;
+      
       if (session?.user) {
         // Try to find existing account
-        const { data: clientAccount, error: clientError } = await supabase
+        const { data: clientAccount } = await supabase
           .from('Client_Accounts')
           .select('id')
           .eq('user_id', session.user.id)
           .maybeSingle();
 
-        if (!clientError && clientAccount?.id) {
+        if (clientAccount?.id) {
           clientAccountId = clientAccount.id;
         } else {
-          // Create or fetch account row for this user
-          const { data: upserted, error: upsertError } = await supabase
+          // Create account for this user
+          const { data: upserted } = await supabase
             .from('Client_Accounts')
             .upsert(
               {
@@ -154,17 +131,29 @@ const Checkout = () => {
                 email: session.user.email,
                 first_name: bookingData.firstName,
                 last_name: bookingData.lastName,
-                phone: bookingData.phone
+                phone: bookingData.phone,
+                stripe_customer_id: customerId
               },
               { onConflict: 'user_id' }
             )
             .select('id')
             .single();
 
-          if (!upsertError && upserted?.id) {
+          if (upserted?.id) {
             clientAccountId = upserted.id;
           }
         }
+      }
+
+      // Update client account with Stripe customer ID
+      if (clientAccountId) {
+        await supabase
+          .from('Client_Accounts')
+          .update({ 
+            stripe_customer_id: customerId,
+            default_payment_method_id: paymentIntent.payment_method as string
+          })
+          .eq('id', clientAccountId);
       }
 
       // Convert time to proper format for database
@@ -180,49 +169,28 @@ const Checkout = () => {
         return `${hours.padStart(2, '0')}:${minutes}:00`;
       };
 
-      // Update client account with contact info and store payment method (if signed in)
-      const lastFourDigits = cardNumber.replace(/\s/g, '').slice(-4);
-      if (clientAccountId) {
-        const { error: updateError } = await supabase
-          .from('Client_Accounts')
-          .update({ 
-            phone: bookingData.phone,
-            email: bookingData.email,
-            // Store encrypted payment info (in real app, use proper encryption)
-            default_payment_method_id: `card_****${lastFourDigits}`
-          })
-          .eq('id', clientAccountId);
-
-        if (updateError) {
-          console.error('Failed to update client account:', updateError);
-        }
-      }
-
-      // Fetch course details to get facility_id and online booking availability
+      // Fetch course details
       let facilityId = null;
       let hasOnlineBooking = null;
       
       if (bookingData.preferredCourse) {
         try {
-          const courseResponse = await (supabase as any)
+          const { data: courseData } = await (supabase as any)
             .from('Course_Database')
             .select('"Facility ID", "Tee Time Booking"')
             .eq('"Course Name"', bookingData.preferredCourse)
             .maybeSingle();
-          
-          const courseData = courseResponse.data;
-          const courseError = courseResponse.error;
         
-        if (!courseError && courseData) {
-          facilityId = courseData["Facility ID"];
-          hasOnlineBooking = courseData["Tee Time Booking"];
-        }
+          if (courseData) {
+            facilityId = courseData["Facility ID"];
+            hasOnlineBooking = courseData["Tee Time Booking"];
+          }
         } catch (error) {
           console.log('Error fetching course data:', error);
         }
       }
 
-      // Save booking to database with payment information
+      // Save booking to database
       const bookingRecord = {
         client_id: clientAccountId,
         user_id: session?.user?.id || null,
@@ -240,11 +208,11 @@ const Checkout = () => {
         booking_status: 'pending',
         total_price: calculateTotal(),
         promo_code: promoCode || null,
-        payment_status: 'pending',
-        stripe_payment_method_id: `card_****${lastFourDigits}`,
+        payment_status: 'authorized',
+        stripe_payment_method_id: paymentIntent.payment_method as string,
+        stripe_payment_intent_id: paymentIntent.id,
         amount_charged: calculateTotal(),
-        currency: 'usd',
-        stripe_payment_intent_id: null // Will be updated when charged manually
+        currency: 'usd'
       };
 
       const { error: dbError } = await supabase
@@ -256,56 +224,38 @@ const Checkout = () => {
         throw new Error('Failed to save booking');
       }
 
-      // Store booking data and payment info for confirmation page
+      // Store confirmation data
       const confirmationData = {
         ...bookingData,
         totalPrice: calculateTotal(),
         promoCode,
         paymentMethod: {
-          last4: cardNumber.slice(-4),
+          last4: (paymentIntent.payment_method as any)?.card?.last4 || '****',
           cardType: 'Credit Card'
         }
       };
       
       sessionStorage.setItem('confirmationData', JSON.stringify(confirmationData));
       
-      // Send confirmation email
-      console.log('Attempting to send confirmation email to:', bookingData.email);
+      // Send emails
       try {
-        const emailPayload = {
-          ...confirmationData,
-          type: 'booking_confirmation',
-          firstName: bookingData.firstName,
-          lastName: bookingData.lastName,
-          email: bookingData.email
-        };
-        console.log('Email payload:', emailPayload);
-        
-        const emailResponse = await supabase.functions.invoke('send-booking-confirmation', {
-          body: emailPayload
+        await supabase.functions.invoke('send-booking-confirmation', {
+          body: {
+            ...confirmationData,
+            type: 'booking_confirmation',
+            firstName: bookingData.firstName,
+            lastName: bookingData.lastName,
+            email: bookingData.email
+          }
         });
-        
-        console.log('Email function response:', emailResponse);
-        
-        if (emailResponse.error) {
-          console.error('Email function returned error:', emailResponse.error);
-        } else {
-          console.log('Email sent successfully');
-        }
-      } catch (emailError) {
-        console.error('Email error caught:', emailError);
-        // Don't fail the booking if email fails
-      }
 
-      // Send admin alert for new booking
-      try {
         await supabase.functions.invoke('send-admin-alert', {
           body: {
             type: 'booking_made',
             userEmail: bookingData.email,
             userName: `${bookingData.firstName} ${bookingData.lastName}`,
             bookingDetails: {
-              id: Date.now().toString(), // Use timestamp as ID for demo
+              id: paymentIntent.id,
               course: bookingData.preferredCourse,
               date: bookingData.date,
               players: bookingData.numberOfPlayers,
@@ -313,25 +263,23 @@ const Checkout = () => {
             }
           }
         });
-      } catch (alertError) {
-        console.error('Admin alert error:', alertError);
-        // Don't fail the booking if alert fails
+      } catch (emailError) {
+        console.error('Email error:', emailError);
       }
 
-      // Clear booking data from session storage
       sessionStorage.removeItem('bookingData');
       
       toast({
-        title: "Booking Submitted!",
-        description: "Your tee time request has been received. We'll confirm your booking shortly."
+        title: "Payment Authorized!",
+        description: "Your card has been authorized. We'll charge it once your tee time is confirmed."
       });
 
       navigate('/confirmation');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Booking error:', error);
       toast({
-        title: "Booking Failed",
-        description: "There was an error processing your booking. Please try again.",
+        title: "Payment Failed",
+        description: error.message || "There was an error processing your payment. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -339,23 +287,13 @@ const Checkout = () => {
     }
   };
 
-  if (!bookingData) {
-    return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-lg text-muted-foreground">Loading booking details...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">Secure Your Tee Time</h1>
           <p className="text-lg text-muted-foreground">
-            Review your booking details and complete payment
+            Review your booking details and authorize payment
           </p>
         </div>
 
@@ -447,128 +385,85 @@ const Checkout = () => {
           <Card className="golf-card-shadow">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <CreditCard className="w-5 h-5 text-primary" />
-                <span>Payment Information</span>
+                <Shield className="w-5 h-5 text-primary" />
+                <span>Payment Authorization</span>
               </CardTitle>
               <CardDescription>
-                We'll securely store your payment method for manual processing
+                Your card will be authorized but not charged until your tee time is confirmed
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="cardNumber">Card Number *</Label>
-                    <Input
-                      id="cardNumber"
-                      type="text"
-                      placeholder="1234 5678 9012 3456"
-                      value={cardNumber}
-                      onChange={handleCardNumberChange}
-                      maxLength={19}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="expiryDate">Expiry Date *</Label>
-                      <Input
-                        id="expiryDate"
-                        type="text"
-                        placeholder="MM/YY"
-                        value={expiryDate}
-                        onChange={handleExpiryChange}
-                        maxLength={5}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cvv">CVV *</Label>
-                      <Input
-                        id="cvv"
-                        type="text"
-                        placeholder="123"
-                        value={cvv}
-                        onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').substring(0, 4))}
-                        maxLength={4}
-                        required
+                    <Label>Card Details *</Label>
+                    <div className="p-3 border rounded-md">
+                      <CardElement
+                        options={{
+                          style: {
+                            base: {
+                              fontSize: '16px',
+                              color: 'hsl(var(--foreground))',
+                              '::placeholder': {
+                                color: 'hsl(var(--muted-foreground))',
+                              },
+                            },
+                          },
+                        }}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="cardName">Name on Card *</Label>
+                    <Label htmlFor="promoCode" className="flex items-center space-x-1">
+                      <Tag className="w-4 h-4" />
+                      <span>Promo Code (Optional)</span>
+                    </Label>
                     <Input
-                      id="cardName"
+                      id="promoCode"
                       type="text"
-                      placeholder="John Doe"
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value)}
-                      required
+                      placeholder="Enter promo code"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="promoCode">Promo Code (Optional)</Label>
-                    <div className="relative">
-                      <Tag className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="promoCode"
-                        type="text"
-                        placeholder="Enter promo code"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-2">
+                  <div className="flex items-start space-x-2 pt-4">
                     <Checkbox
                       id="terms"
                       checked={termsAccepted}
                       onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
                     />
-                    <Label htmlFor="terms" className="text-sm leading-relaxed">
-                      I accept the{' '}
-                      <button type="button" className="text-primary underline">
-                        Terms and Conditions
-                      </button>{' '}
-                      and understand that this is a booking request that will be manually processed.
+                    <Label 
+                      htmlFor="terms" 
+                      className="text-sm leading-relaxed cursor-pointer"
+                    >
+                      I agree to the terms and conditions, including the cancellation policy. 
+                      I understand my card will be authorized now and charged only when my 
+                      tee time is confirmed.
                     </Label>
-                  </div>
-
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-start space-x-3">
-                      <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <div className="text-sm text-muted-foreground">
-                        <p className="font-medium mb-1">Secure Payment Processing</p>
-                        <p>
-                          Your payment information is securely stored and will only be charged 
-                          once we confirm your tee time availability. You'll receive an email 
-                          confirmation with all details.
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  className="w-full text-lg py-6" 
-                  disabled={isProcessing}
+                <div className="bg-muted/50 p-4 rounded-lg flex items-start space-x-3">
+                  <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium mb-1">Secure Payment Authorization</p>
+                    <p className="text-muted-foreground">
+                      Your payment information is encrypted and secure. We'll authorize your 
+                      card for ${calculateTotal()}.00 and charge it only after we confirm your 
+                      tee time booking.
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="lg"
+                  disabled={!stripe || isProcessing}
                 >
-                  {isProcessing ? (
-                    <>Processing...</>
-                  ) : (
-                    <>
-                      <Shield className="w-5 h-5 mr-2" />
-                      Secure My Tee Time
-                    </>
-                  )}
+                  {isProcessing ? "Authorizing..." : `Authorize Payment - $${calculateTotal()}.00`}
                 </Button>
               </form>
             </CardContent>
@@ -576,6 +471,36 @@ const Checkout = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const Checkout = () => {
+  const navigate = useNavigate();
+  const [bookingData, setBookingData] = useState<BookingData | null>(null);
+
+  useEffect(() => {
+    const storedData = sessionStorage.getItem('bookingData');
+    if (storedData) {
+      setBookingData(JSON.parse(storedData));
+    } else {
+      navigate('/book');
+    }
+  }, [navigate]);
+
+  if (!bookingData) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg text-muted-foreground">Loading booking details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutForm bookingData={bookingData} />
+    </Elements>
   );
 };
 
