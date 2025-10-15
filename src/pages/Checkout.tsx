@@ -36,6 +36,12 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     // Create PaymentIntent on component mount
     const createPaymentIntent = async () => {
       try {
+        console.log('Creating payment intent...', {
+          amount: calculateTotal(),
+          email: bookingData.email,
+          name: `${bookingData.firstName} ${bookingData.lastName}`
+        });
+
         const { data, error } = await supabase.functions.invoke('create-payment-intent', {
           body: {
             amount: calculateTotal(),
@@ -44,16 +50,26 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
           }
         });
 
-        if (error) throw error;
+        console.log('Payment intent response:', { data, error });
 
+        if (error) {
+          console.error('Payment intent error:', error);
+          throw error;
+        }
+
+        if (!data) {
+          throw new Error('No data returned from payment intent creation');
+        }
+
+        console.log('Payment intent created successfully:', data);
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId);
         setCustomerId(data.customerId);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error creating payment intent:', error);
         toast({
           title: "Payment Setup Failed",
-          description: "Unable to initialize payment. Please try again.",
+          description: error.message || "Unable to initialize payment. Please refresh and try again.",
           variant: "destructive"
         });
       }
@@ -65,7 +81,23 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!stripe || !elements || !clientSecret) {
+    console.log('Form submitted', { stripe: !!stripe, elements: !!elements, clientSecret: !!clientSecret });
+
+    if (!stripe || !elements) {
+      toast({
+        title: "Payment Not Ready",
+        description: "Payment system is still loading. Please wait a moment and try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!clientSecret) {
+      toast({
+        title: "Payment Not Initialized",
+        description: "Payment setup failed. Please refresh the page and try again.",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -79,6 +111,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     }
 
     setIsProcessing(true);
+    console.log('Processing payment...');
 
     try {
       const cardElement = elements.getElement(CardElement) as StripeCardElement;
@@ -461,9 +494,13 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={!stripe || isProcessing}
+                  disabled={!stripe || !clientSecret || isProcessing}
                 >
-                  {isProcessing ? "Authorizing..." : `Authorize Payment - $${calculateTotal()}.00`}
+                  {isProcessing 
+                    ? "Authorizing..." 
+                    : !clientSecret 
+                    ? "Loading..." 
+                    : `Authorize Payment - $${calculateTotal()}.00`}
                 </Button>
               </form>
             </CardContent>
