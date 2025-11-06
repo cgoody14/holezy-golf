@@ -49,7 +49,6 @@ const Profile = () => {
   const [showCancellationDialog, setShowCancellationDialog] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
   const [accountInfo, setAccountInfo] = useState({
-    username: '',
     phone: '',
     firstName: '',
     lastName: ''
@@ -81,7 +80,7 @@ const Profile = () => {
 
       const { data, error } = await supabase
         .from('Client_Accounts')
-        .select('username, phone, first_name, last_name')
+        .select('phone, first_name, last_name')
         .eq('user_id', session.user.id)
         .maybeSingle();
 
@@ -89,7 +88,6 @@ const Profile = () => {
       
       if (data) {
         const info = {
-          username: data.username || '',
           phone: data.phone || '',
           firstName: data.first_name || '',
           lastName: data.last_name || ''
@@ -410,13 +408,6 @@ const Profile = () => {
                           ? `${accountInfo.firstName} ${accountInfo.lastName}`.trim()
                           : 'Not set'}
                       </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Username</p>
-                      <p className="font-medium">{accountInfo.username || 'Not set'}</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
