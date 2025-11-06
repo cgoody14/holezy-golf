@@ -237,7 +237,6 @@ const Profile = () => {
         .from('Client_Accounts')
         .upsert({
           user_id: session.user.id,
-          email: session.user.email,
           username: editedInfo.username,
           phone: editedInfo.phone,
           first_name: editedInfo.firstName,
