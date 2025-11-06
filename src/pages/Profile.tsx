@@ -233,6 +233,25 @@ const Profile = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) return;
 
+      // Check if username already exists (excluding current user)
+      if (editedInfo.username && editedInfo.username.trim() !== '') {
+        const { data: existingUsername } = await supabase
+          .from('Client_Accounts')
+          .select('id, user_id')
+          .eq('username', editedInfo.username.trim())
+          .neq('user_id', session.user.id)
+          .maybeSingle();
+
+        if (existingUsername) {
+          toast({
+            title: "Username already taken",
+            description: "Please choose a different username",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
       // First, check if there's an existing account with this email but no user_id
       const { data: existingAccount } = await supabase
         .from('Client_Accounts')
@@ -249,7 +268,7 @@ const Profile = () => {
           .from('Client_Accounts')
           .update({
             user_id: session.user.id,
-            username: editedInfo.username,
+            username: editedInfo.username?.trim() || null,
             phone: editedInfo.phone,
             first_name: editedInfo.firstName,
             last_name: editedInfo.lastName
@@ -262,7 +281,7 @@ const Profile = () => {
           .from('Client_Accounts')
           .upsert({
             user_id: session.user.id,
-            username: editedInfo.username,
+            username: editedInfo.username?.trim() || null,
             phone: editedInfo.phone,
             first_name: editedInfo.firstName,
             last_name: editedInfo.lastName
