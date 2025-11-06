@@ -224,6 +224,22 @@ const BookingForm = () => {
   };
 
   const updateFormData = (field: keyof BookingData, value: string | number) => {
+    // Validate date in real-time to prevent past dates on mobile
+    if (field === 'date' && typeof value === 'string') {
+      const selectedDate = new Date(value);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      
+      if (selectedDate < todayDate) {
+        toast({
+          title: "Invalid Date",
+          description: "Please select today or a future date",
+          variant: "destructive"
+        });
+        return; // Don't update if date is in the past
+      }
+    }
+    
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
