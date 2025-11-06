@@ -235,22 +235,26 @@ const Profile = () => {
 
       const { error } = await supabase
         .from('Client_Accounts')
-        .update({
+        .upsert({
+          user_id: session.user.id,
+          email: session.user.email,
           username: editedInfo.username,
           phone: editedInfo.phone,
           first_name: editedInfo.firstName,
           last_name: editedInfo.lastName
-        })
-        .eq('user_id', session.user.id);
+        }, {
+          onConflict: 'user_id'
+        });
 
       if (error) throw error;
 
-      setAccountInfo(editedInfo);
+      // Reload account info from database to ensure it's saved
+      await loadAccountInfo();
       setIsEditing(false);
       
       toast({
         title: "Profile Updated",
-        description: "Your account information has been updated successfully"
+        description: "Your account information has been saved successfully"
       });
     } catch (error) {
       console.error('Error updating account info:', error);
