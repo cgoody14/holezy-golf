@@ -160,6 +160,20 @@ const BookingForm = () => {
       return;
     }
 
+    // Validate date is not in the past
+    const selectedDate = new Date(formData.date);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    
+    if (selectedDate < todayDate) {
+      toast({
+        title: "Invalid Date",
+        description: "Please select today or a future date",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.earliestTime) {
       toast({
         title: "Missing Information",
