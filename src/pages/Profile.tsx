@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   User, 
   Calendar, 
@@ -13,7 +15,9 @@ import {
   Mail, 
   Phone,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  Edit2,
+  Save
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -44,12 +48,21 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showCancellationDialog, setShowCancellationDialog] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+  const [accountInfo, setAccountInfo] = useState({
+    username: '',
+    phone: '',
+    firstName: '',
+    lastName: ''
+  });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedInfo, setEditedInfo] = useState(accountInfo);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     checkAuth();
     loadBookings();
+    loadAccountInfo();
   }, []);
 
   const checkAuth = async () => {
@@ -58,6 +71,34 @@ const Profile = () => {
       navigate('/auth');
     } else {
       setUser(session.user);
+    }
+  };
+
+  const loadAccountInfo = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+
+      const { data, error } = await supabase
+        .from('Client_Accounts')
+        .select('username, phone, first_name, last_name')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        const info = {
+          username: data.username || '',
+          phone: data.phone || '',
+          firstName: data.first_name || '',
+          lastName: data.last_name || ''
+        };
+        setAccountInfo(info);
+        setEditedInfo(info);
+      }
+    } catch (error) {
+      console.error('Error loading account info:', error);
     }
   };
 
@@ -179,6 +220,48 @@ const Profile = () => {
     return booking.booking_status.toLowerCase() === 'pending';
   };
 
+  const handleEditToggle = () => {
+    if (isEditing) {
+      // Cancel editing - reset to original values
+      setEditedInfo(accountInfo);
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleSaveAccountInfo = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+
+      const { error } = await supabase
+        .from('Client_Accounts')
+        .update({
+          username: editedInfo.username,
+          phone: editedInfo.phone,
+          first_name: editedInfo.firstName,
+          last_name: editedInfo.lastName
+        })
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+
+      setAccountInfo(editedInfo);
+      setIsEditing(false);
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your account information has been updated successfully"
+      });
+    } catch (error) {
+      console.error('Error updating account info:', error);
+      toast({
+        title: "Error updating profile",
+        description: "Please try again or contact support",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
@@ -208,9 +291,28 @@ const Profile = () => {
         {/* Account Info */}
         <Card className="golf-card-shadow mb-8">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <User className="w-5 h-5 text-primary" />
-              <span>Account Information</span>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <User className="w-5 h-5 text-primary" />
+                <span>Account Information</span>
+              </div>
+              <Button
+                variant={isEditing ? "outline" : "ghost"}
+                size="sm"
+                onClick={isEditing ? handleSaveAccountInfo : handleEditToggle}
+              >
+                {isEditing ? (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save
+                  </>
+                ) : (
+                  <>
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Edit
+                  </>
+                )}
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -236,6 +338,86 @@ const Profile = () => {
                 </div>
               </div>
             </div>
+
+            <div className="grid md:grid-cols-2 gap-4 pt-4 border-t">
+              {isEditing ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      value={editedInfo.firstName}
+                      onChange={(e) => setEditedInfo({ ...editedInfo, firstName: e.target.value })}
+                      placeholder="Enter first name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      value={editedInfo.lastName}
+                      onChange={(e) => setEditedInfo({ ...editedInfo, lastName: e.target.value })}
+                      placeholder="Enter last name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      value={editedInfo.username}
+                      onChange={(e) => setEditedInfo({ ...editedInfo, username: e.target.value })}
+                      placeholder="Enter username"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={editedInfo.phone}
+                      onChange={(e) => setEditedInfo({ ...editedInfo, phone: e.target.value })}
+                      placeholder="Enter phone number"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center space-x-3">
+                    <User className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Name</p>
+                      <p className="font-medium">
+                        {accountInfo.firstName || accountInfo.lastName 
+                          ? `${accountInfo.firstName} ${accountInfo.lastName}`.trim()
+                          : 'Not set'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <User className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Username</p>
+                      <p className="font-medium">{accountInfo.username || 'Not set'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Phone Number</p>
+                      <p className="font-medium">{accountInfo.phone || 'Not set'}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {isEditing && (
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={handleEditToggle}>
+                  Cancel
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
