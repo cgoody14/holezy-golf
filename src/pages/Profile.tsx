@@ -233,17 +233,45 @@ const Profile = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) return;
 
-      const { error } = await supabase
+      // First, check if there's an existing account with this email but no user_id
+      const { data: existingAccount } = await supabase
         .from('Client_Accounts')
-        .upsert({
-          user_id: session.user.id,
-          username: editedInfo.username,
-          phone: editedInfo.phone,
-          first_name: editedInfo.firstName,
-          last_name: editedInfo.lastName
-        }, {
-          onConflict: 'user_id'
-        });
+        .select('id')
+        .eq('email', session.user.email)
+        .is('user_id', null)
+        .maybeSingle();
+
+      let error;
+
+      if (existingAccount) {
+        // Update the existing record to link it to this user
+        const updateResult = await supabase
+          .from('Client_Accounts')
+          .update({
+            user_id: session.user.id,
+            username: editedInfo.username,
+            phone: editedInfo.phone,
+            first_name: editedInfo.firstName,
+            last_name: editedInfo.lastName
+          })
+          .eq('id', existingAccount.id);
+        error = updateResult.error;
+      } else {
+        // No existing record, do upsert
+        const upsertResult = await supabase
+          .from('Client_Accounts')
+          .upsert({
+            user_id: session.user.id,
+            email: session.user.email,
+            username: editedInfo.username,
+            phone: editedInfo.phone,
+            first_name: editedInfo.firstName,
+            last_name: editedInfo.lastName
+          }, {
+            onConflict: 'user_id'
+          });
+        error = upsertResult.error;
+      }
 
       if (error) throw error;
 
