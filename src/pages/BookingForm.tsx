@@ -60,7 +60,7 @@ const BookingForm = () => {
       // First try to get data from Client_Accounts table
       const { data: clientAccount, error } = await supabase
         .from('Client_Accounts')
-        .select('first_name, last_name, email, phone, username')
+        .select('first_name, last_name, email, phone')
         .eq('user_id', user.id)
         .maybeSingle();
 
