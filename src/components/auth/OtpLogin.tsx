@@ -107,8 +107,7 @@ const OtpLogin = ({ onSuccess }: OtpLoginProps) => {
               email: u.email,
               first_name: (u.user_metadata as any)?.first_name,
               last_name: (u.user_metadata as any)?.last_name,
-              phone: (u.user_metadata as any)?.phone,
-              username: (u.user_metadata as any)?.username,
+              phone: (u.user_metadata as any)?.phone
             },
             { onConflict: 'user_id' }
           );
