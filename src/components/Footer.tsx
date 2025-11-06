@@ -35,7 +35,7 @@ const Footer = () => {
             </a>
           </div>
           <div className="text-center text-sm text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Holezy. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Holezy Golf. All rights reserved.</p>
           </div>
         </div>
       </div>
