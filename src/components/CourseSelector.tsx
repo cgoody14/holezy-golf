@@ -202,10 +202,6 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
           // Don't block the user flow if notification fails
         }
 
-        toast({
-          title: "Course added successfully",
-          description: `${customCourseName} has been added to our database`,
-        });
 
         onCourseSelect(customCourseName);
         setSearchTerm(customCourseName);
@@ -216,11 +212,6 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
         loadCourses(0, true);
       } catch (error) {
         console.error('Error saving custom course:', error);
-        toast({
-          title: "Error adding course",
-          description: "Please try again later",
-          variant: "destructive"
-        });
       }
   };
 
