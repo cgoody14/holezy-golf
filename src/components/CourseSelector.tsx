@@ -149,8 +149,22 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   };
 
   const handleCustomCourseSubmit = async () => {
-    if (customCourse["Course Name"] && customCourse.city && customCourse.state) {
-      try {
+    // Validate all required fields
+    if (!customCourse["Course Name"] || !customCourse.city || !customCourse.state) {
+      const missingFields = [];
+      if (!customCourse["Course Name"]) missingFields.push("Course name");
+      if (!customCourse.city) missingFields.push("City");
+      if (!customCourse.state) missingFields.push("State");
+      
+      toast({
+        title: "Missing information",
+        description: `Please fill in: ${missingFields.join(", ")}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
         // Find the highest facility_id starting from a large number for user-added courses
         const { data: existingCourses, error: fetchError } = await supabase
           .from('Course_Database')
@@ -218,7 +232,6 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
           variant: "destructive"
         });
       }
-    }
   };
 
   const handleLoadMore = () => {
