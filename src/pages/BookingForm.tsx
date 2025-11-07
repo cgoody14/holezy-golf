@@ -201,14 +201,6 @@ const BookingForm = () => {
       return;
     }
 
-    if (!formData.preferredCourse.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please select a golf course",
-        variant: "destructive"
-      });
-      return;
-    }
 
     // Check if user is authenticated
     if (!user) {
