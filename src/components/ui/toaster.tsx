@@ -11,9 +11,14 @@ import {
 export function Toaster() {
   const { toasts } = useToast()
 
+  // Filter out the specific validation toast for course selection
+  const filteredToasts = toasts.filter((t) => {
+    return !(t.title === "Missing Information" && typeof t.description === "string" && t.description === "Please select a golf course");
+  });
+
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {filteredToasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
