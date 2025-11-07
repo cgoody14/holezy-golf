@@ -345,10 +345,10 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                     <Loader2 className="h-3 w-3 animate-spin" />
                     <span>Searching courses...</span>
                   </div>
-                ) : searchTerm ? (
+) : searchTerm ? (
                   `${filteredCourses.length - 1} courses found`
                 ) : (
-                  "Can't find your course? Select \"Other\" to add it manually."
+                  "Can't find your course? Select \"Add Custom Course\" to add it manually."
                 )}
               </div>
 
