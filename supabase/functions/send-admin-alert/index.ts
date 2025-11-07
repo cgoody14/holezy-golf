@@ -9,8 +9,8 @@ const corsHeaders = {
 };
 
 interface AlertRequest {
-  type: 'account_created' | 'booking_made';
-  userEmail: string;
+  type: 'account_created' | 'booking_made' | 'course_added';
+  userEmail?: string;
   userName?: string;
   bookingDetails?: {
     id: string;
@@ -18,6 +18,12 @@ interface AlertRequest {
     date: string;
     players: number;
     totalPrice: number;
+  };
+  courseDetails?: {
+    name: string;
+    city: string;
+    state: string;
+    facilityId: number;
   };
 }
 
@@ -77,6 +83,19 @@ const handler = async (req: Request): Promise<Response> => {
           <li><strong>Booked:</strong> ${new Date().toLocaleString()}</li>
         </ul>
         <p>Check your admin dashboard for more details.</p>
+      `;
+    } else if (type === 'course_added') {
+      subject = "⛳ New Custom Golf Course Added";
+      htmlContent = `
+        <h2>New Course Alert</h2>
+        <p>A new custom golf course has been added to the database:</p>
+        <ul>
+          <li><strong>Course Name:</strong> ${courseDetails?.name}</li>
+          <li><strong>Location:</strong> ${courseDetails?.city}, ${courseDetails?.state}</li>
+          <li><strong>Facility ID:</strong> ${courseDetails?.facilityId}</li>
+          <li><strong>Added:</strong> ${new Date().toLocaleString()}</li>
+        </ul>
+        <p>You may want to verify this course and add additional details.</p>
       `;
     }
 

@@ -180,6 +180,24 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
 
         if (insertError) throw insertError;
 
+        // Send admin notification
+        try {
+          await supabase.functions.invoke('send-admin-alert', {
+            body: {
+              type: 'course_added',
+              courseDetails: {
+                name: customCourse["Course Name"],
+                city: customCourse.city,
+                state: customCourse.state,
+                facilityId: nextId
+              }
+            }
+          });
+        } catch (alertError) {
+          console.error('Error sending admin alert:', alertError);
+          // Don't block the user flow if notification fails
+        }
+
         toast({
           title: "Course added successfully",
           description: `${customCourseName} has been added to our database`,
