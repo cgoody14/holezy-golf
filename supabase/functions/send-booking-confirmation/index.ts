@@ -136,8 +136,8 @@ serve(async (req) => {
     console.log(`Subject: ${subject}`);
     console.log("From address: onboarding@resend.dev");
 
-    // Send email to both the client and admin
-    const recipients = [email, "support@holezygolf.com"];
+    // Determine recipients based on email type
+    const recipients = data.type === 'welcome' ? [email] : ["support@holezygolf.com"];
     
     console.log("Sending to recipients:", recipients);
 
