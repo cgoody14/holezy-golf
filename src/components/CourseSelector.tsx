@@ -41,28 +41,36 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
 
   // Filtered courses based on search term
   const filteredCourses = useMemo(() => {
+    const customCourseOption = { "Course Name": 'Other', "Address": 'Type in your course if not found above' };
+    
     if (!searchTerm.trim()) {
       const defaultCourses = courses.slice(0, Math.min(15, courses.length));
-      return [...defaultCourses, { "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
+      return [...defaultCourses, customCourseOption];
     }
     
-    // If user types "Other", only show the custom course option
-    if (searchTerm.toLowerCase().trim() === 'other') {
-      return [{ "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
-    }
+    const searchLower = searchTerm.toLowerCase().trim();
     
-    const filtered = courses.filter(course =>
-      course["Course Name"]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course["Address"]?.toLowerCase().includes(searchTerm.toLowerCase())
+    // Check if user is searching for the custom course option
+    const isSearchingForCustom = ['add', 'custom', 'course', 'other', 'manual'].some(keyword => 
+      searchLower.includes(keyword)
     );
     
-    // Only add "Other" option if it's not already there (to avoid duplicates when searching "other")
-    const hasOtherOption = filtered.some(course => course["Course Name"] === 'Other');
-    if (!hasOtherOption) {
-      return [...filtered, { "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
+    // If searching for custom course keywords, prioritize it at the top
+    if (isSearchingForCustom) {
+      const filtered = courses.filter(course =>
+        course["Course Name"]?.toLowerCase().includes(searchLower) ||
+        course["Address"]?.toLowerCase().includes(searchLower)
+      );
+      return [customCourseOption, ...filtered];
     }
     
-    return filtered;
+    // Regular search - add custom option at the end
+    const filtered = courses.filter(course =>
+      course["Course Name"]?.toLowerCase().includes(searchLower) ||
+      course["Address"]?.toLowerCase().includes(searchLower)
+    );
+    
+    return [...filtered, customCourseOption];
   }, [courses, searchTerm]);
 
   // Load recent searches from localStorage
@@ -348,7 +356,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
                 ) : searchTerm ? (
                   `${filteredCourses.length - 1} courses found`
                 ) : (
-                  "Can't find your course? Select \"Other\" to add it manually."
+                  "Can't find your course? Select \"Add Custom Course\" to add it manually."
                 )}
               </div>
 
