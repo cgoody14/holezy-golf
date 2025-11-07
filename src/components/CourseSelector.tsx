@@ -315,20 +315,23 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
           <div className="text-sm font-medium text-muted-foreground">Enter your golf course details:</div>
           <div className="space-y-2">
             <Input
-              placeholder="Golf course name"
+              placeholder="Golf course name *"
               value={customCourse["Course Name"]}
               onChange={(e) => setCustomCourse(prev => ({ ...prev, "Course Name": e.target.value }))}
+              required
             />
             <div className="grid grid-cols-2 gap-2">
               <Input
-                placeholder="City"
+                placeholder="City *"
                 value={customCourse.city}
                 onChange={(e) => setCustomCourse(prev => ({ ...prev, city: e.target.value }))}
+                required
               />
               <Input
-                placeholder="State"
+                placeholder="State *"
                 value={customCourse.state}
                 onChange={(e) => setCustomCourse(prev => ({ ...prev, state: e.target.value }))}
+                required
               />
             </div>
           </div>
