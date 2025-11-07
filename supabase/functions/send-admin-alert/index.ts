@@ -38,8 +38,8 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
     console.log("Available env vars:", Object.keys(Deno.env.toObject()));
     
-    const { type, userEmail, userName, bookingDetails }: AlertRequest = await req.json();
-    console.log("Admin alert request:", { type, userEmail, userName, bookingDetails });
+    const { type, userEmail, userName, bookingDetails, courseDetails }: AlertRequest = await req.json();
+    console.log("Admin alert request:", { type, userEmail, userName, bookingDetails, courseDetails });
     
     // Initialize Resend client with the API key
     let resendApiKey = Deno.env.get("RESEND_API_KEY");
