@@ -155,8 +155,8 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
         const { data: existingCourses, error: fetchError } = await supabase
           .from('Course_Database')
           .select('"Facility ID"')
-          .gte('facility_id', 900000) // Start user-added courses from 900000
-          .order('facility_id', { ascending: false })
+          .gte('"Facility ID"', 900000) // Start user-added courses from 900000
+          .order('"Facility ID"', { ascending: false })
           .limit(1);
 
         if (fetchError) throw fetchError;
@@ -175,7 +175,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
             "Facility ID": nextId,
             "Course Name": customCourseName,
             "Address": `${customCourse.city}, ${customCourse.state}`,
-            source: 'user_added'
+            "Source": 'user_added'
           });
 
         if (insertError) throw insertError;
