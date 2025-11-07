@@ -151,16 +151,6 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
   const handleCustomCourseSubmit = async () => {
     // Validate all required fields
     if (!customCourse["Course Name"] || !customCourse.city || !customCourse.state) {
-      const missingFields = [];
-      if (!customCourse["Course Name"]) missingFields.push("Course name");
-      if (!customCourse.city) missingFields.push("City");
-      if (!customCourse.state) missingFields.push("State");
-      
-      toast({
-        title: "Missing information",
-        description: `Please fill in: ${missingFields.join(", ")}`,
-        variant: "destructive"
-      });
       return;
     }
 
