@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   User, 
   Calendar, 
@@ -17,7 +18,9 @@ import {
   CreditCard,
   AlertCircle,
   Edit2,
-  Save
+  Save,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -55,6 +58,8 @@ const Profile = () => {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editedInfo, setEditedInfo] = useState(accountInfo);
+  const [confirmedOpen, setConfirmedOpen] = useState(true);
+  const [cancelledOpen, setCancelledOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -442,7 +447,7 @@ const Profile = () => {
               Manage your tee time requests and confirmed bookings
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             {bookings.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
@@ -455,97 +460,213 @@ const Profile = () => {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-6">
-                {bookings.map((booking) => (
-                  <Card key={booking.id} className="border-l-4 border-l-primary">
-                    <CardContent className="p-6">
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-                        <div className="space-y-3">
-                          {/* Booking Status and Date */}
-                          <div className="flex items-center space-x-3">
-                            <Badge className={getStatusColor(booking.booking_status)}>
-                              {booking.booking_status.charAt(0).toUpperCase() + booking.booking_status.slice(1)}
-                              {booking.cancelled && booking.cancelled_at && (
-                                <span className="ml-1">
-                                  - {new Date(booking.cancelled_at).toLocaleDateString()}
-                                </span>
-                              )}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              Requested on {new Date(booking.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-
-                          {/* Course and Date */}
-                          <div className="space-y-2">
-                            <div className="flex items-start space-x-2">
-                              <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                              <span className="font-medium">{booking.preferred_course}</span>
-                            </div>
-                            
-                            <div className="flex items-center space-x-4">
-                              <div className="flex items-center space-x-2">
-                                <Calendar className="w-4 h-4 text-muted-foreground" />
-                                <span>
-                                  {new Date(booking.booking_date).toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <Clock className="w-4 h-4 text-muted-foreground" />
-                                <span>
-                                  {formatTime(booking.earliest_time)} - {formatTime(booking.latest_time)}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <Users className="w-4 h-4 text-muted-foreground" />
-                                <span>{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Contact and Payment Info */}
-                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                            <div className="flex items-center space-x-1">
-                              <Phone className="w-3 h-3" />
-                              <span>{booking.phone}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <CreditCard className="w-3 h-3" />
-                              <span>${booking.total_price}.00</span>
-                            </div>
-                            {booking.promo_code && (
-                              <Badge variant="outline" className="text-xs">
-                                {booking.promo_code}
-                              </Badge>
-                            )}
-                          </div>
+              <>
+                {/* Confirmed Bookings Section */}
+                {bookings.filter(b => b.booking_status.toLowerCase() === 'confirmed' || b.booking_status.toLowerCase() === 'pending').length > 0 && (
+                  <Collapsible open={confirmedOpen} onOpenChange={setConfirmedOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-between h-auto py-4 px-6 bg-card hover:bg-accent/50"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-2 h-2 rounded-full bg-green-500" />
+                          <span className="text-lg font-semibold">
+                            Confirmed & Pending Bookings
+                          </span>
+                          <Badge variant="secondary" className="ml-2">
+                            {bookings.filter(b => b.booking_status.toLowerCase() === 'confirmed' || b.booking_status.toLowerCase() === 'pending').length}
+                          </Badge>
                         </div>
+                        {confirmedOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-4 space-y-4">
+                      {bookings
+                        .filter(b => b.booking_status.toLowerCase() === 'confirmed' || b.booking_status.toLowerCase() === 'pending')
+                        .map((booking) => (
+                          <Card key={booking.id} className="border-l-4 border-l-primary">
+                            <CardContent className="p-6">
+                              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-3">
+                                    <Badge className={getStatusColor(booking.booking_status)}>
+                                      {booking.booking_status.charAt(0).toUpperCase() + booking.booking_status.slice(1)}
+                                    </Badge>
+                                    <span className="text-sm text-muted-foreground">
+                                      Requested on {new Date(booking.created_at).toLocaleDateString()}
+                                    </span>
+                                  </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex space-x-2">
-                          {canCancelBooking(booking) && (
-                            <Button 
-                              variant="destructive" 
-                              size="sm"
-                              onClick={() => handleCancelClick(booking)}
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Cancel
-                            </Button>
-                          )}
+                                  <div className="space-y-2">
+                                    <div className="flex items-start space-x-2">
+                                      <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                      <span className="font-medium">{booking.preferred_course}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-4">
+                                      <div className="flex items-center space-x-2">
+                                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                                        <span>
+                                          {new Date(booking.booking_date).toLocaleDateString('en-US', {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric'
+                                          })}
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        <Clock className="w-4 h-4 text-muted-foreground" />
+                                        <span>
+                                          {formatTime(booking.earliest_time)} - {formatTime(booking.latest_time)}
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        <Users className="w-4 h-4 text-muted-foreground" />
+                                        <span>{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center space-x-1">
+                                      <Phone className="w-3 h-3" />
+                                      <span>{booking.phone}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <CreditCard className="w-3 h-3" />
+                                      <span>${booking.total_price}.00</span>
+                                    </div>
+                                    {booking.promo_code && (
+                                      <Badge variant="outline" className="text-xs">
+                                        {booking.promo_code}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex space-x-2">
+                                  {canCancelBooking(booking) && (
+                                    <Button 
+                                      variant="destructive" 
+                                      size="sm"
+                                      onClick={() => handleCancelClick(booking)}
+                                    >
+                                      <X className="w-4 h-4 mr-1" />
+                                      Cancel
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Cancelled Bookings Section */}
+                {bookings.filter(b => b.booking_status.toLowerCase() === 'cancelled').length > 0 && (
+                  <Collapsible open={cancelledOpen} onOpenChange={setCancelledOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-between h-auto py-4 px-6 bg-card hover:bg-accent/50"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-2 h-2 rounded-full bg-red-500" />
+                          <span className="text-lg font-semibold">
+                            Cancelled Bookings
+                          </span>
+                          <Badge variant="secondary" className="ml-2">
+                            {bookings.filter(b => b.booking_status.toLowerCase() === 'cancelled').length}
+                          </Badge>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                        {cancelledOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-4 space-y-4">
+                      {bookings
+                        .filter(b => b.booking_status.toLowerCase() === 'cancelled')
+                        .map((booking) => (
+                          <Card key={booking.id} className="border-l-4 border-l-destructive opacity-75">
+                            <CardContent className="p-6">
+                              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-3">
+                                    <Badge className={getStatusColor(booking.booking_status)}>
+                                      {booking.booking_status.charAt(0).toUpperCase() + booking.booking_status.slice(1)}
+                                      {booking.cancelled_at && (
+                                        <span className="ml-1">
+                                          - {new Date(booking.cancelled_at).toLocaleDateString()}
+                                        </span>
+                                      )}
+                                    </Badge>
+                                    <span className="text-sm text-muted-foreground">
+                                      Requested on {new Date(booking.created_at).toLocaleDateString()}
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <div className="flex items-start space-x-2">
+                                      <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                      <span className="font-medium">{booking.preferred_course}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-4">
+                                      <div className="flex items-center space-x-2">
+                                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                                        <span>
+                                          {new Date(booking.booking_date).toLocaleDateString('en-US', {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric'
+                                          })}
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        <Clock className="w-4 h-4 text-muted-foreground" />
+                                        <span>
+                                          {formatTime(booking.earliest_time)} - {formatTime(booking.latest_time)}
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        <Users className="w-4 h-4 text-muted-foreground" />
+                                        <span>{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center space-x-1">
+                                      <Phone className="w-3 h-3" />
+                                      <span>{booking.phone}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <CreditCard className="w-3 h-3" />
+                                      <span>${booking.total_price}.00</span>
+                                    </div>
+                                    {booking.promo_code && (
+                                      <Badge variant="outline" className="text-xs">
+                                        {booking.promo_code}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
