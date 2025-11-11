@@ -32,49 +32,48 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     return bookingData.numberOfPlayers * 5; // $5 per player
   };
 
-  useEffect(() => {
-    // Create PaymentIntent on component mount
-    const createPaymentIntent = async () => {
-      try {
-        console.log('Creating payment intent...', {
+  const createPaymentIntent = async () => {
+    try {
+      console.log('Creating payment intent...', {
+        amount: calculateTotal(),
+        email: bookingData.email,
+        name: `${bookingData.firstName} ${bookingData.lastName}`
+      });
+
+      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+        body: {
           amount: calculateTotal(),
           email: bookingData.email,
           name: `${bookingData.firstName} ${bookingData.lastName}`
-        });
-
-        const { data, error } = await supabase.functions.invoke('create-payment-intent', {
-          body: {
-            amount: calculateTotal(),
-            email: bookingData.email,
-            name: `${bookingData.firstName} ${bookingData.lastName}`
-          }
-        });
-
-        console.log('Payment intent response:', { data, error });
-
-        if (error) {
-          console.error('Payment intent error:', error);
-          throw error;
         }
+      });
 
-        if (!data) {
-          throw new Error('No data returned from payment intent creation');
-        }
+      console.log('Payment intent response:', { data, error });
 
-        console.log('Payment intent created successfully:', data);
-        setClientSecret(data.clientSecret);
-        setPaymentIntentId(data.paymentIntentId);
-        setCustomerId(data.customerId);
-      } catch (error: any) {
-        console.error('Error creating payment intent:', error);
-        toast({
-          title: "Payment Setup Failed",
-          description: error.message || "Unable to initialize payment. Please refresh and try again.",
-          variant: "destructive"
-        });
+      if (error) {
+        console.error('Payment intent error:', error);
+        throw error;
       }
-    };
 
+      if (!data) {
+        throw new Error('No data returned from payment intent creation');
+      }
+
+      console.log('Payment intent created successfully:', data);
+      setClientSecret(data.clientSecret);
+      setPaymentIntentId(data.paymentIntentId);
+      setCustomerId(data.customerId);
+    } catch (error: any) {
+      console.error('Error creating payment intent:', error);
+      toast({
+        title: "Payment Setup Failed",
+        description: error.message || "Unable to initialize payment. Please refresh and try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  useEffect(() => {
     createPaymentIntent();
   }, [bookingData, toast]);
 
@@ -328,11 +327,21 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
       navigate('/confirmation');
     } catch (error: any) {
       console.error('Booking error:', error);
-      toast({
-        title: "Payment Failed",
-        description: error.message || "There was an error processing your payment. Please try again.",
-        variant: "destructive"
-      });
+      
+      // If payment was already authorized but booking failed, create new payment intent
+      if (error.message.includes('This PaymentIntent has already been confirmed')) {
+        toast({
+          title: "Payment Already Processed",
+          description: "Your previous payment was authorized. Creating a new payment form...",
+        });
+        await createPaymentIntent();
+      } else {
+        toast({
+          title: "Payment Failed",
+          description: error.message || "There was an error processing your payment. Please try again.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
