@@ -22,7 +22,7 @@ const FAQ = () => {
       try {
         const { data, error } = await supabase.storage
           .from('HolezyGolf')
-          .createSignedUrl('tutorial', 31536000); // 1 year expiration
+          .createSignedUrl('Tutorial.mov', 31536000); // 1 year expiration
 
         if (error) {
           console.error('Error generating signed URL:', error);
