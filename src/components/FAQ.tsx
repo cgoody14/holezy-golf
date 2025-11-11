@@ -38,7 +38,7 @@ const FAQ = () => {
     },
     {
       question: "What are your cancellation and reschedule policies?",
-      answer: "You can cancel or reschedule your booking up to 24 hours before your tee time for a full refund. For cancellations within 24 hours, a $10 processing fee applies. Same-day cancellations are non-refundable."
+      answer: "You can cancel anytime before the teetime is made and get a full refund. If a booking has been made, please contact the course directly to cancel the tee time."
     },
     {
       question: "How much does the service cost?",
@@ -50,11 +50,11 @@ const FAQ = () => {
     },
     {
       question: "How far in advance can I book?",
-      answer: "You can book tee times up to 30 days in advance, depending on the course's booking policy. Popular weekend slots fill up quickly, so we recommend booking as early as possible."
+      answer: "You can book as far out as you would like. We will continuously check once tee times open and will send you a confirmation once a tee time has been booked."
     },
     {
       question: "What if my preferred time isn't available?",
-      answer: "We'll search for the closest available times to your preference and present you with options. If nothing suitable is found, we'll notify you and provide alternative dates or courses."
+      answer: "We will look to book tee times within the designated window you select when you complete the booking form."
     }
   ];
 
