@@ -110,7 +110,7 @@ const handler = async (req: Request): Promise<Response> => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         emailResponse = await resend.emails.send({
-          from: "onboarding@resend.dev",
+          from: "Holezy Golf <noreply@holezygolf.com>",
           to: ["support@holezygolf.com"],
           subject: subject,
           html: htmlContent,
