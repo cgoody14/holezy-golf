@@ -1,4 +1,4 @@
-import { Facebook, Instagram, Linkedin } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 
 const Footer = () => {
   return (
@@ -7,7 +7,7 @@ const Footer = () => {
         <div className="flex flex-col items-center space-y-4">
           <div className="flex space-x-6">
             <a 
-              href="https://instagram.com/golfbooker" 
+              href="https://www.instagram.com/holezygolf/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-primary transition-colors duration-200"
@@ -16,7 +16,16 @@ const Footer = () => {
               <Instagram className="w-6 h-6" />
             </a>
             <a 
-              href="https://facebook.com/golfbooker" 
+              href="https://x.com/HolezyGolf" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors duration-200"
+              aria-label="Follow us on X"
+            >
+              <Twitter className="w-6 h-6" />
+            </a>
+            <a 
+              href="https://www.facebook.com/profile.php?id=61582873627163" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-primary transition-colors duration-200"
@@ -25,7 +34,7 @@ const Footer = () => {
               <Facebook className="w-6 h-6" />
             </a>
             <a 
-              href="https://linkedin.com/company/golfbooker" 
+              href="https://www.linkedin.com/company/holezygolf" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-primary transition-colors duration-200"
