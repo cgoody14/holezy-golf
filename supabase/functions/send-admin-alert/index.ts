@@ -102,14 +102,57 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Attempting to send admin email to: support@holezygolf.com");
     console.log("Subject:", subject);
 
-    const emailResponse = await resend.emails.send({
-      from: "onboarding@resend.dev",
-      to: ["support@holezygolf.com"],
-      subject: subject,
-      html: htmlContent,
-    });
-
-    console.log("Admin alert sent successfully:", JSON.stringify(emailResponse, null, 2));
+    // Retry logic for rate limiting
+    let emailResponse;
+    let lastError;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        emailResponse = await resend.emails.send({
+          from: "onboarding@resend.dev",
+          to: ["support@holezygolf.com"],
+          subject: subject,
+          html: htmlContent,
+        });
+        
+        console.log("Admin alert sent successfully:", JSON.stringify(emailResponse, null, 2));
+        break; // Success, exit retry loop
+        
+      } catch (error: any) {
+        lastError = error;
+        
+        // Check if it's a rate limit error
+        if (error.statusCode === 429 || error.name === 'rate_limit_exceeded') {
+          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          console.log(`Rate limit hit. Retry ${attempt}/${maxRetries} after ${waitTime}ms`);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          }
+        }
+        
+        // If not a rate limit error or max retries reached, throw
+        throw error;
+      }
+    }
+    
+    // If we exhausted retries, log but don't fail the request
+    if (!emailResponse && lastError) {
+      console.error("Failed to send email after retries:", lastError);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "Email queued for retry",
+        error: lastError.message 
+      }), {
+        status: 202, // Accepted but not processed
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      });
+    }
 
     return new Response(JSON.stringify({ success: true, emailResponse }), {
       status: 200,
