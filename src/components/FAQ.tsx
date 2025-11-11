@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -8,37 +7,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Play, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Play } from "lucide-react";
 import tutorialThumbnail from "@/assets/tutorial-thumbnail.jpg";
 
 const FAQ = () => {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
-
-  useEffect(() => {
-    const getSignedUrl = async () => {
-      setIsLoadingVideo(true);
-      try {
-        const { data, error } = await supabase.storage
-          .from('HolezyGolf')
-          .createSignedUrl('Tutorial.mov', 31536000); // 1 year expiration
-
-        if (error) {
-          console.error('Error generating signed URL:', error);
-          return;
-        }
-
-        setVideoUrl(data.signedUrl);
-      } catch (error) {
-        console.error('Error fetching video:', error);
-      } finally {
-        setIsLoadingVideo(false);
-      }
-    };
-
-    getSignedUrl();
-  }, []);
+  const videoUrl = "https://azgnzhtqoyqlixfhlkyz.supabase.co/storage/v1/object/public/HolezyGolf/Tutorial.mov";
   const faqs = [
     {
       question: "How do I book a tee time?",
@@ -115,28 +88,16 @@ const FAQ = () => {
             </DialogTrigger>
             <DialogContent className="max-w-4xl">
               <div className="aspect-video bg-muted rounded-lg overflow-hidden">
-                {isLoadingVideo ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : videoUrl ? (
-                  <video
-                    controls
-                    preload="metadata"
-                    className="w-full h-full"
-                    controlsList="nodownload"
-                  >
-                    <source src={videoUrl} type="video/mp4" />
-                    <source src={videoUrl} type="video/quicktime" />
-                    Your browser does not support the video tag.
-                  </video>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <p className="text-muted-foreground">
-                      Unable to load video. Please try again later.
-                    </p>
-                  </div>
-                )}
+                <video
+                  controls
+                  preload="metadata"
+                  className="w-full h-full"
+                  controlsList="nodownload"
+                >
+                  <source src={videoUrl} type="video/quicktime" />
+                  <source src={videoUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
               </div>
             </DialogContent>
           </Dialog>
