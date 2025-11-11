@@ -100,10 +100,10 @@ const Contact = () => {
                   For general inquiries and support
                 </p>
                 <a 
-                  href="mailto:bookings@holezygolf.com" 
+                  href="mailto:support@holezygolf.com" 
                   className="text-primary hover:underline font-medium"
                 >
-                  bookings@holezygolf.com
+                  support@holezygolf.com
                 </a>
               </CardContent>
             </Card>
