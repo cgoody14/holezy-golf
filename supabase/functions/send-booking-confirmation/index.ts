@@ -134,7 +134,7 @@ serve(async (req) => {
 
     console.log(`Attempting to send email to: ${email}`);
     console.log(`Subject: ${subject}`);
-    console.log("From address: onboarding@resend.dev");
+    console.log("From address: noreply@holezygolf.com");
 
     // Determine recipients based on email type
     const recipients = data.type === 'welcome' ? [email] : ["support@holezygolf.com"];
@@ -142,7 +142,7 @@ serve(async (req) => {
     console.log("Sending to recipients:", recipients);
 
     const emailResponse = await resend.emails.send({
-      from: "onboarding@resend.dev",
+      from: "Holezy Golf <noreply@holezygolf.com>",
       to: recipients,
       subject,
       html,

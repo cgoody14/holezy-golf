@@ -62,8 +62,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Send email notification to admin
     const adminEmailResponse = await resend.emails.send({
-      from: "GolfBooker Contact <noreply@golfbooker.com>",
-      to: ["cgoody14@gmail.com"], // Replace with your actual email
+      from: "Holezy Golf Contact <noreply@holezygolf.com>",
+      to: ["support@holezygolf.com"],
       subject: `New Contact Form: ${subject || 'General Inquiry'}`,
       html: `
         <h2>New Contact Form Submission</h2>
@@ -85,7 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Send confirmation email to customer
     const customerEmailResponse = await resend.emails.send({
-      from: "GolfBooker Support <support@golfbooker.com>",
+      from: "Holezy Golf Support <support@holezygolf.com>",
       to: [email],
       subject: "We received your message!",
       html: `
