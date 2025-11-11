@@ -118,6 +118,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
       if (!cardElement) throw new Error('Card element not found');
 
       // Confirm the payment (this authorizes the card)
+      console.log('Confirming card payment with clientSecret:', clientSecret);
       const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
         clientSecret,
         {
@@ -132,13 +133,30 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         }
       );
 
+      console.log('Payment confirmation result:', { 
+        error: confirmError, 
+        paymentIntent: paymentIntent ? {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          amount: paymentIntent.amount
+        } : null 
+      });
+
       if (confirmError) {
+        console.error('Stripe confirmation error:', confirmError);
         throw new Error(confirmError.message);
       }
 
-      if (paymentIntent.status !== 'requires_capture') {
-        throw new Error('Payment authorization failed');
+      if (!paymentIntent) {
+        throw new Error('No payment intent returned from Stripe');
       }
+
+      if (paymentIntent.status !== 'requires_capture') {
+        console.error('Unexpected payment status:', paymentIntent.status);
+        throw new Error(`Payment authorization failed. Status: ${paymentIntent.status}`);
+      }
+
+      console.log('Payment authorized successfully:', paymentIntent.id);
 
       // Get current user session (guests allowed)
       const { data: { session } } = await supabase.auth.getSession();
