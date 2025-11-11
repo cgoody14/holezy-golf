@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Play, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import tutorialThumbnail from "@/assets/tutorial-thumbnail.jpg";
 
 const FAQ = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -99,10 +100,18 @@ const FAQ = () => {
           </p>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="flex items-center space-x-2">
-                <Play className="w-4 h-4" />
-                <span>Watch Tutorial</span>
-              </Button>
+              <div className="relative cursor-pointer group max-w-3xl mx-auto mb-4">
+                <img 
+                  src={tutorialThumbnail} 
+                  alt="Tutorial video thumbnail showing golf booking interface"
+                  className="w-full rounded-lg shadow-lg"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors rounded-lg">
+                  <div className="w-20 h-20 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-all shadow-xl">
+                    <Play className="w-10 h-10 text-primary ml-1" fill="currentColor" />
+                  </div>
+                </div>
+              </div>
             </DialogTrigger>
             <DialogContent className="max-w-4xl">
               <div className="aspect-video bg-muted rounded-lg overflow-hidden">
