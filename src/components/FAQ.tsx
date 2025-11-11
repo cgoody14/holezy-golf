@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -5,13 +6,31 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Play } from "lucide-react";
-import tutorialThumbnail from "@/assets/tutorial-thumbnail.jpg";
 
 const FAQ = () => {
   const videoUrl = "https://azgnzhtqoyqlixfhlkyz.supabase.co/storage/v1/object/public/HolezyGolf/Tutorial.mov";
+  const [thumbnail, setThumbnail] = useState<string>("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = videoUrl;
+    video.currentTime = 2; // Capture frame at 2 seconds
+    
+    video.addEventListener('loadeddata', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setThumbnail(canvas.toDataURL('image/jpeg', 0.8));
+      }
+    });
+  }, []);
   const faqs = [
     {
       question: "How do I book a tee time?",
@@ -74,11 +93,15 @@ const FAQ = () => {
           <Dialog>
             <DialogTrigger asChild>
               <div className="relative cursor-pointer group max-w-3xl mx-auto mb-4">
-                <img 
-                  src={tutorialThumbnail} 
-                  alt="Tutorial video thumbnail showing golf booking interface"
-                  className="w-full rounded-lg shadow-lg"
-                />
+                {thumbnail ? (
+                  <img 
+                    src={thumbnail} 
+                    alt="Tutorial video thumbnail"
+                    className="w-full rounded-lg shadow-lg"
+                  />
+                ) : (
+                  <div className="w-full aspect-video bg-muted rounded-lg shadow-lg animate-pulse" />
+                )}
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors rounded-lg">
                   <div className="w-20 h-20 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-all shadow-xl">
                     <Play className="w-10 h-10 text-primary ml-1" fill="currentColor" />
