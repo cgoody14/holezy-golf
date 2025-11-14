@@ -157,6 +157,24 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
 
       console.log('Payment authorized successfully:', paymentIntent.id);
 
+      // Get payment method details from Stripe
+      let cardLast4 = '****';
+      let cardBrand = 'card';
+      try {
+        const { data: paymentMethodData } = await supabase.functions.invoke('get-payment-method-details', {
+          body: { paymentMethodId: paymentIntent.payment_method as string }
+        });
+        
+        if (paymentMethodData?.last4) {
+          cardLast4 = paymentMethodData.last4;
+          cardBrand = paymentMethodData.brand;
+          console.log('Payment method details retrieved:', { last4: cardLast4, brand: cardBrand });
+        }
+      } catch (pmError) {
+        console.error('Error fetching payment method details:', pmError);
+        // Continue with default values
+      }
+
       // Get current user session (guests allowed)
       const { data: { session } } = await supabase.auth.getSession();
       let clientAccountId: number | null = null;
@@ -280,8 +298,8 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         totalPrice: calculateTotal(),
         promoCode,
         paymentMethod: {
-          last4: (paymentIntent.payment_method as any)?.card?.last4 || '****',
-          cardType: 'Credit Card'
+          last4: cardLast4,
+          cardType: `${cardBrand.charAt(0).toUpperCase() + cardBrand.slice(1)} Card`
         }
       };
       
