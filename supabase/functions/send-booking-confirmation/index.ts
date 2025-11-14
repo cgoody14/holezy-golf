@@ -93,16 +93,16 @@ serve(async (req) => {
     } else {
       // Booking confirmation
       const bookingData = data.bookingDetails || data;
-      subject = "Golf Tee Time Booking Confirmation";
+      subject = "Holezy Golf Booking Request";
       html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #22c55e; margin-bottom: 10px;">⛳ Booking Confirmed!</h1>
+            <h1 style="color: #22c55e; margin-bottom: 10px;">⛳ Request Received</h1>
             <p style="color: #666; font-size: 16px;">Your tee time request has been received</p>
           </div>
           
           <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h2 style="color: #333; margin-top: 0;">Booking Details</h2>
+            <h2 style="color: #333; margin-top: 0;">Details</h2>
             <p><strong>Name:</strong> ${data.firstName} ${data.lastName}</p>
             <p><strong>Date:</strong> ${bookingData.date ? new Date(bookingData.date).toLocaleDateString('en-US', {
               weekday: 'long',
@@ -113,6 +113,7 @@ serve(async (req) => {
             <p><strong>Time Range:</strong> ${bookingData.earliestTime || bookingData.earliest_time} - ${bookingData.latestTime || bookingData.latest_time}</p>
             <p><strong>Players:</strong> ${bookingData.numberOfPlayers || bookingData.number_of_players}</p>
             <p><strong>Course:</strong> ${bookingData.preferredCourse || bookingData.preferred_course}</p>
+            <p><strong>Course Address:</strong> ${bookingData.courseAddress || 'Address pending'}</p>
             <p><strong>Total:</strong> $${bookingData.totalPrice || bookingData.total_price}.00</p>
           </div>
           
@@ -126,7 +127,7 @@ serve(async (req) => {
           </div>
           
           <p style="color: #666; text-align: center; margin-top: 30px;">
-            Questions? Reply to this email or contact our support team.
+            Questions? Please email support@holezygolf.com for support
           </p>
         </div>
       `;

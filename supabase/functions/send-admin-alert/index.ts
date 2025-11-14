@@ -12,12 +12,15 @@ interface AlertRequest {
   type: 'account_created' | 'booking_made' | 'course_added';
   userEmail?: string;
   userName?: string;
+  userPhone?: string;
   bookingDetails?: {
     id: string;
     course: string;
     date: string;
     players: number;
     totalPrice: number;
+    courseAddress?: string;
+    facilityId?: string;
   };
   courseDetails?: {
     name: string;
@@ -38,8 +41,8 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
     console.log("Available env vars:", Object.keys(Deno.env.toObject()));
     
-    const { type, userEmail, userName, bookingDetails, courseDetails }: AlertRequest = await req.json();
-    console.log("Admin alert request:", { type, userEmail, userName, bookingDetails, courseDetails });
+    const { type, userEmail, userName, userPhone, bookingDetails, courseDetails }: AlertRequest = await req.json();
+    console.log("Admin alert request:", { type, userEmail, userName, userPhone, bookingDetails, courseDetails });
     
     // Initialize Resend client with the API key
     let resendApiKey = Deno.env.get("RESEND_API_KEY");
@@ -75,7 +78,10 @@ const handler = async (req: Request): Promise<Response> => {
         <ul>
           <li><strong>Customer:</strong> ${userName || userEmail}</li>
           <li><strong>Email:</strong> ${userEmail}</li>
+          <li><strong>Phone:</strong> ${userPhone || 'Not provided'}</li>
           <li><strong>Course:</strong> ${bookingDetails?.course}</li>
+          <li><strong>Course Address:</strong> ${bookingDetails?.courseAddress || 'Not provided'}</li>
+          <li><strong>Facility ID:</strong> ${bookingDetails?.facilityId || 'Not provided'}</li>
           <li><strong>Date:</strong> ${bookingDetails?.date}</li>
           <li><strong>Players:</strong> ${bookingDetails?.players}</li>
           <li><strong>Total Price:</strong> $${bookingDetails?.totalPrice}</li>
