@@ -138,7 +138,7 @@ serve(async (req) => {
     console.log("From address: noreply@holezygolf.com");
 
     // Determine recipients based on email type
-    const recipients = data.type === 'welcome' ? [email] : ["support@holezygolf.com"];
+    const recipients = [email];
     
     console.log("Sending to recipients:", recipients);
 
