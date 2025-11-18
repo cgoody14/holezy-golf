@@ -123,7 +123,7 @@ const BlogAdmin = () => {
         author_name: user.user_metadata?.first_name 
           ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ""}`.trim()
           : user.email || "Anonymous",
-        published_at: status === "published" && !editId ? new Date().toISOString() : undefined,
+        published_at: status === "published" ? new Date().toISOString() : null,
       };
 
       let error;
