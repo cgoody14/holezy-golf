@@ -112,8 +112,7 @@ const Contact = () => {
             <div className="bg-primary/10 rounded-lg p-6">
               <h3 className="font-semibold mb-2">Quick Response Times</h3>
               <p className="text-sm text-muted-foreground">
-                We typically respond to all inquiries within 2-4 hours during business hours. 
-                For urgent booking changes, please call us directly.
+                We typically respond to all inquiries within 2-4 hours during business hours.
               </p>
             </div>
           </div>
