@@ -17,10 +17,13 @@ interface BlogPost {
   published_at: string;
   featured_image_url: string | null;
   tags: string[] | null;
+  status: string;
+  created_at: string;
 }
 
 const Blog = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [drafts, setDrafts] = useState<BlogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -36,7 +39,7 @@ const Blog = () => {
     const fetchPosts = async () => {
       const { data, error } = await supabase
         .from("blog_posts")
-        .select("id, title, slug, excerpt, author_name, published_at, featured_image_url, tags")
+        .select("id, title, slug, excerpt, author_name, published_at, featured_image_url, tags, status, created_at")
         .eq("status", "published")
         .order("published_at", { ascending: false });
 
@@ -50,6 +53,26 @@ const Blog = () => {
 
     fetchPosts();
   }, []);
+
+  useEffect(() => {
+    const fetchDrafts = async () => {
+      if (!isAuthenticated) return;
+      
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .select("id, title, slug, excerpt, author_name, published_at, featured_image_url, tags, status, created_at")
+        .eq("status", "draft")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching drafts:", error);
+      } else {
+        setDrafts(data || []);
+      }
+    };
+
+    fetchDrafts();
+  }, [isAuthenticated]);
 
   return (
     <>
@@ -80,6 +103,67 @@ const Blog = () => {
               </Button>
             )}
           </div>
+
+          {isAuthenticated && drafts.length > 0 && (
+            <div className="mb-16">
+              <h2 className="text-3xl font-bold mb-8">Your Drafts</h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {drafts.map((draft) => (
+                  <Card key={draft.id} className="golf-card-shadow hover:shadow-lg transition-all duration-300 group border-2 border-dashed">
+                    {draft.featured_image_url && (
+                      <div className="overflow-hidden h-48">
+                        <img
+                          src={draft.featured_image_url}
+                          alt={draft.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    )}
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="text-xl font-semibold group-hover:text-primary transition-colors">
+                          {draft.title}
+                        </h3>
+                        <Badge variant="secondary">Draft</Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <User className="w-4 h-4" />
+                          {draft.author_name}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          {format(new Date(draft.created_at), "MMM d, yyyy")}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <p className="text-muted-foreground line-clamp-3">
+                        {draft.excerpt || "No excerpt available"}
+                      </p>
+                      {draft.tags && draft.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {draft.tags.map((tag) => (
+                            <Badge key={tag} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <Button variant="outline" asChild className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <Link to={`/blog/admin?edit=${draft.id}`}>
+                          Edit Draft
+                          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <h2 className="text-3xl font-bold mb-8">Published Posts</h2>
 
           {isLoading ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
