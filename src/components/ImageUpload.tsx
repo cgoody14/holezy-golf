@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageCropDialog } from "./ImageCropDialog";
 
 interface ImageUploadProps {
   onImageUploaded: (url: string) => void;
@@ -13,50 +14,61 @@ export const ImageUpload = ({ onImageUploaded, currentImage }: ImageUploadProps)
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentImage);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState<string>("");
   const { toast } = useToast();
 
-  const uploadImage = async (file: File) => {
+  const validateAndShowCrop = (file: File) => {
+    // Validate file type
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    const fileExtension = file.name.toLowerCase().split(".").pop();
+    
+    // Block HEIC files specifically as they're not browser-supported
+    if (fileExtension === "heic" || fileExtension === "heif") {
+      toast({
+        title: "HEIC format not supported",
+        description: "Please convert your image to JPG or PNG first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!validImageTypes.includes(file.type)) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload JPG, PNG, WebP, or GIF images",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create preview URL for cropping
+    const url = URL.createObjectURL(file);
+    setTempImageUrl(url);
+    setCropDialogOpen(true);
+  };
+
+  const uploadImage = async (blob: Blob) => {
     try {
       setIsUploading(true);
 
-      // Validate file type
-      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
-      const fileExtension = file.name.toLowerCase().split(".").pop();
-      
-      // Block HEIC files specifically as they're not browser-supported
-      if (fileExtension === "heic" || fileExtension === "heif") {
-        toast({
-          title: "HEIC format not supported",
-          description: "Please convert your image to JPG or PNG first",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!validImageTypes.includes(file.type)) {
-        toast({
-          title: "Invalid file type",
-          description: "Please upload JPG, PNG, WebP, or GIF images",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Validate file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: "Please upload an image smaller than 5MB",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const fileExt = file.name.split(".").pop();
+      const fileExt = "jpg";
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      const { error: uploadError, data } = await supabase.storage
+      const file = new File([blob], fileName, { type: "image/jpeg" });
+
+      const { error: uploadError } = await supabase.storage
         .from("blog-images")
         .upload(filePath, file);
 
@@ -91,9 +103,9 @@ export const ImageUpload = ({ onImageUploaded, currentImage }: ImageUploadProps)
 
     const file = e.dataTransfer.files[0];
     if (file) {
-      uploadImage(file);
+      validateAndShowCrop(file);
     }
-  }, [uploadImage]);
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -108,8 +120,20 @@ export const ImageUpload = ({ onImageUploaded, currentImage }: ImageUploadProps)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      uploadImage(file);
+      validateAndShowCrop(file);
     }
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropDialogOpen(false);
+    URL.revokeObjectURL(tempImageUrl);
+    await uploadImage(croppedBlob);
+  };
+
+  const handleCropCancel = () => {
+    setCropDialogOpen(false);
+    URL.revokeObjectURL(tempImageUrl);
+    setTempImageUrl("");
   };
 
   const handleRemove = () => {
@@ -119,6 +143,12 @@ export const ImageUpload = ({ onImageUploaded, currentImage }: ImageUploadProps)
 
   return (
     <div className="space-y-4">
+      <ImageCropDialog
+        open={cropDialogOpen}
+        imageUrl={tempImageUrl}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+      />
       {previewUrl ? (
         <div className="relative">
           <img
