@@ -17,6 +17,7 @@ import Contact from "./pages/Contact";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import BlogAdmin from "./pages/BlogAdmin";
+import AdminSetup from "./pages/AdminSetup";
 import FAQ from "./components/FAQ";
 import NotFound from "./pages/NotFound";
 
@@ -43,6 +44,7 @@ const App = () => (
               <Route path="/blog" element={<Blog />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/blog/admin" element={<BlogAdmin />} />
+              <Route path="/admin-setup" element={<AdminSetup />} />
               <Route path="/faq" element={<div className="py-12 px-4"><FAQ /></div>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
