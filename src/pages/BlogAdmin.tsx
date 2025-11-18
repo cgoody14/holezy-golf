@@ -39,6 +39,24 @@ const BlogAdmin = () => {
           variant: "destructive",
         });
         navigate("/auth");
+        return;
+      }
+
+      // Check if user has admin role
+      const { data: roleData, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .single();
+
+      if (error || !roleData) {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to manage blog posts.",
+          variant: "destructive",
+        });
+        navigate("/blog");
       }
     };
     checkAuth();

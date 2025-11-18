@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, User, ArrowLeft, Edit } from "lucide-react";
+import { Calendar, ArrowLeft, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { Helmet } from "react-helmet";
 
@@ -12,7 +12,6 @@ interface BlogPost {
   title: string;
   content: string;
   excerpt: string;
-  author_name: string;
   author_id: string | null;
   published_at: string;
   featured_image_url: string | null;
@@ -44,10 +43,19 @@ const BlogPost = () => {
       } else {
         setPost(data);
         
-        // Check if user can edit
+        // Check if user can edit (admin role)
         const { data: { user } } = await supabase.auth.getUser();
-        if (user && data.author_id === user.id) {
-          setCanEdit(true);
+        if (user) {
+          const { data: roleData } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .eq("role", "admin")
+            .single();
+          
+          if (roleData) {
+            setCanEdit(true);
+          }
         }
       }
       setIsLoading(false);
@@ -80,10 +88,6 @@ const BlogPost = () => {
     "@type": "BlogPosting",
     headline: post.title,
     description: post.excerpt,
-    author: {
-      "@type": "Person",
-      name: post.author_name,
-    },
     datePublished: post.published_at,
     image: post.featured_image_url || undefined,
   };
@@ -100,7 +104,6 @@ const BlogPost = () => {
           <meta property="og:image" content={post.featured_image_url} />
         )}
         <meta property="article:published_time" content={post.published_at} />
-        <meta property="article:author" content={post.author_name} />
         <link rel="canonical" href={window.location.href} />
         <script type="application/ld+json">
           {JSON.stringify(jsonLd)}
@@ -136,10 +139,6 @@ const BlogPost = () => {
             </h1>
             
             <div className="flex flex-wrap items-center gap-4 text-muted-foreground mb-4">
-              <span className="flex items-center gap-2">
-                <User className="w-5 h-5" />
-                {post.author_name}
-              </span>
               <span className="flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
                 {format(new Date(post.published_at), "MMMM d, yyyy")}
