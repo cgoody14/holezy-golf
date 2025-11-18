@@ -88,6 +88,16 @@ const handleSignOut = async () => {
               Book a Tee Time
             </Link>
             <Link
+              to="/blog"
+              className={`font-medium transition-colors ${
+                isActive('/blog') 
+                  ? 'text-primary border-b-2 border-primary pb-1' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Blog
+            </Link>
+            <Link
               to="/faq"
               className={`font-medium transition-colors ${
                 isActive('/faq') 
@@ -167,6 +177,15 @@ const handleSignOut = async () => {
               onClick={() => setIsMenuOpen(false)}
             >
               Book a Tee Time
+            </Link>
+            <Link
+              to="/blog"
+              className={`block font-medium transition-colors ${
+                isActive('/blog') ? 'text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Blog
             </Link>
             <Link
               to="/faq"
