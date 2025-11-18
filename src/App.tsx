@@ -14,6 +14,9 @@ import Checkout from "./pages/Checkout";
 import Confirmation from "./pages/Confirmation";
 import Profile from "./pages/Profile";
 import Contact from "./pages/Contact";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
+import BlogAdmin from "./pages/BlogAdmin";
 import FAQ from "./components/FAQ";
 import NotFound from "./pages/NotFound";
 
@@ -37,6 +40,9 @@ const App = () => (
               <Route path="/confirmation" element={<Confirmation />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/blog/:slug" element={<BlogPost />} />
+              <Route path="/blog/admin" element={<BlogAdmin />} />
               <Route path="/faq" element={<div className="py-12 px-4"><FAQ /></div>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
