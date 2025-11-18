@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, User, ArrowRight, PenSquare } from "lucide-react";
+import { Calendar, ArrowRight, PenSquare } from "lucide-react";
 import { format } from "date-fns";
 import { Helmet } from "react-helmet";
 
@@ -13,7 +13,6 @@ interface BlogPost {
   title: string;
   slug: string;
   excerpt: string;
-  author_name: string;
   published_at: string;
   featured_image_url: string | null;
   tags: string[] | null;
@@ -25,12 +24,25 @@ const Blog = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [drafts, setDrafts] = useState<BlogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      setIsAuthenticated(!!user);
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      // Check if user has admin role
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .single();
+      
+      setIsAdmin(!!roleData);
     };
     checkAuth();
   }, []);
@@ -39,7 +51,7 @@ const Blog = () => {
     const fetchPosts = async () => {
       const { data, error } = await supabase
         .from("blog_posts")
-        .select("id, title, slug, excerpt, author_name, published_at, featured_image_url, tags, status, created_at")
+        .select("id, title, slug, excerpt, published_at, featured_image_url, tags, status, created_at")
         .eq("status", "published")
         .order("published_at", { ascending: false });
 
@@ -56,11 +68,11 @@ const Blog = () => {
 
   useEffect(() => {
     const fetchDrafts = async () => {
-      if (!isAuthenticated) return;
+      if (!isAdmin) return;
       
       const { data, error } = await supabase
         .from("blog_posts")
-        .select("id, title, slug, excerpt, author_name, published_at, featured_image_url, tags, status, created_at")
+        .select("id, title, slug, excerpt, published_at, featured_image_url, tags, status, created_at")
         .eq("status", "draft")
         .order("created_at", { ascending: false });
 
@@ -72,7 +84,7 @@ const Blog = () => {
     };
 
     fetchDrafts();
-  }, [isAuthenticated]);
+  }, [isAdmin]);
 
   return (
     <>
@@ -94,7 +106,7 @@ const Blog = () => {
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Golf tips, booking guides, and course insights to enhance your game
             </p>
-            {isAuthenticated && (
+            {isAdmin && (
               <Button asChild className="mt-6">
                 <Link to="/blog/admin">
                   <PenSquare className="w-4 h-4 mr-2" />
@@ -104,7 +116,7 @@ const Blog = () => {
             )}
           </div>
 
-          {isAuthenticated && drafts.length > 0 && (
+          {isAdmin && drafts.length > 0 && (
             <div className="mb-16">
               <h2 className="text-3xl font-bold mb-8">Your Drafts</h2>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -127,10 +139,6 @@ const Blog = () => {
                         <Badge variant="secondary">Draft</Badge>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
-                          {draft.author_name}
-                        </div>
                         <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           {format(new Date(draft.created_at), "MMM d, yyyy")}
@@ -210,10 +218,6 @@ const Blog = () => {
                         {post.title}
                       </h2>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-                        <span className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
-                          {post.author_name}
-                        </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           {format(new Date(post.published_at), "MMM d, yyyy")}
