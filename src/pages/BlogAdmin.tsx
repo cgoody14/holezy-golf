@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
+import { ImageUpload } from "@/components/ImageUpload";
 
 const BlogAdmin = () => {
   const navigate = useNavigate();
@@ -217,12 +218,10 @@ const BlogAdmin = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="featured_image">Featured Image URL</Label>
-              <Input
-                id="featured_image"
-                value={formData.featured_image_url}
-                onChange={(e) => setFormData({ ...formData, featured_image_url: e.target.value })}
-                placeholder="https://example.com/image.jpg"
+              <Label htmlFor="featured_image">Featured Image</Label>
+              <ImageUpload
+                onImageUploaded={(url) => setFormData({ ...formData, featured_image_url: url })}
+                currentImage={formData.featured_image_url}
               />
             </div>
 
