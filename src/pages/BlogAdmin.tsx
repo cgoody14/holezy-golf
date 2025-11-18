@@ -31,6 +31,11 @@ const BlogAdmin = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
+      // In development mode, allow access without admin check
+      if (import.meta.env.DEV) {
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast({
