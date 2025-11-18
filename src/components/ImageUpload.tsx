@@ -20,10 +20,23 @@ export const ImageUpload = ({ onImageUploaded, currentImage }: ImageUploadProps)
       setIsUploading(true);
 
       // Validate file type
-      if (!file.type.startsWith("image/")) {
+      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+      const fileExtension = file.name.toLowerCase().split(".").pop();
+      
+      // Block HEIC files specifically as they're not browser-supported
+      if (fileExtension === "heic" || fileExtension === "heif") {
+        toast({
+          title: "HEIC format not supported",
+          description: "Please convert your image to JPG or PNG first",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!validImageTypes.includes(file.type)) {
         toast({
           title: "Invalid file type",
-          description: "Please upload an image file",
+          description: "Please upload JPG, PNG, WebP, or GIF images",
           variant: "destructive",
         });
         return;
