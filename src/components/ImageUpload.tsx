@@ -80,7 +80,7 @@ export const ImageUpload = ({ onImageUploaded, currentImage }: ImageUploadProps)
     if (file) {
       uploadImage(file);
     }
-  }, []);
+  }, [uploadImage]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
