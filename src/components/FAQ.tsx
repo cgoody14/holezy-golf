@@ -65,7 +65,7 @@ const FAQ = () => {
           Frequently Asked Questions
         </CardTitle>
         <p className="text-muted-foreground">
-          Everything you need to know about Holezy Golf's golf booking service
+          Everything you need to know about our golf booking service
         </p>
       </CardHeader>
       <CardContent>
