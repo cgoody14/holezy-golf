@@ -26,7 +26,8 @@ const BlogAdmin = () => {
     featured_image_url: "",
     meta_description: "",
     tags: "",
-    status: "draft" as "draft" | "published",
+    status: "draft" as "draft" | "published" | "scheduled",
+    scheduled_at: "",
   });
 
   useEffect(() => {
@@ -93,7 +94,8 @@ const BlogAdmin = () => {
           featured_image_url: data.featured_image_url || "",
           meta_description: data.meta_description || "",
           tags: data.tags?.join(", ") || "",
-          status: (data.status as "draft" | "published") || "draft",
+          status: (data.status as "draft" | "published" | "scheduled") || "draft",
+          scheduled_at: data.published_at ? new Date(data.published_at).toISOString().slice(0, 16) : "",
         });
       };
       fetchPost();
@@ -117,11 +119,20 @@ const BlogAdmin = () => {
     }));
   };
 
-  const handleSubmit = async (status: "draft" | "published") => {
+  const handleSubmit = async (status: "draft" | "published" | "scheduled") => {
     if (!formData.title || !formData.content || !formData.slug) {
       toast({
         title: "Missing Information",
         description: "Please fill in title, slug, and content",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (status === "scheduled" && !formData.scheduled_at) {
+      toast({
+        title: "Missing Schedule Time",
+        description: "Please select a date and time for scheduling",
         variant: "destructive",
       });
       return;
@@ -146,7 +157,11 @@ const BlogAdmin = () => {
         author_name: user.user_metadata?.first_name 
           ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ""}`.trim()
           : user.email || "Anonymous",
-        published_at: status === "published" ? new Date().toISOString() : null,
+        published_at: status === "published" 
+          ? new Date().toISOString() 
+          : status === "scheduled" && formData.scheduled_at
+          ? new Date(formData.scheduled_at).toISOString()
+          : null,
       };
 
       let error;
@@ -165,7 +180,7 @@ const BlogAdmin = () => {
 
       toast({
         title: "Success!",
-        description: `Post ${status === "published" ? "published" : "saved as draft"}`,
+        description: `Post ${status === "published" ? "published" : status === "scheduled" ? "scheduled" : "saved as draft"}`,
       });
 
       navigate("/blog");
@@ -270,6 +285,20 @@ const BlogAdmin = () => {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="scheduled_at">Schedule Publication (Optional)</Label>
+              <Input
+                id="scheduled_at"
+                type="datetime-local"
+                value={formData.scheduled_at}
+                onChange={(e) => setFormData({ ...formData, scheduled_at: e.target.value })}
+                min={new Date().toISOString().slice(0, 16)}
+              />
+              <p className="text-sm text-muted-foreground">
+                Set a future date and time to automatically publish this post
+              </p>
+            </div>
+
             <div className="flex gap-4">
               <Button
                 onClick={() => handleSubmit("draft")}
@@ -280,13 +309,24 @@ const BlogAdmin = () => {
                 <Save className="w-4 h-4 mr-2" />
                 Save as Draft
               </Button>
+              {formData.scheduled_at && (
+                <Button
+                  onClick={() => handleSubmit("scheduled")}
+                  disabled={isLoading}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Schedule
+                </Button>
+              )}
               <Button
                 onClick={() => handleSubmit("published")}
                 disabled={isLoading}
                 className="flex-1"
               >
                 <Eye className="w-4 h-4 mr-2" />
-                Publish
+                Publish Now
               </Button>
             </div>
           </CardContent>
