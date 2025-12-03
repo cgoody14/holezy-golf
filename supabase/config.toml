@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.capture-payment]
 verify_jwt = false
+
+[functions.validate-coupon]
+verify_jwt = false

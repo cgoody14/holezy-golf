@@ -27,9 +27,76 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [paymentIntentId, setPaymentIntentId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    name: string;
+    percentOff: number | null;
+    amountOff: number | null;
+  } | null>(null);
+
+  const calculateSubtotal = () => {
+    return bookingData.numberOfPlayers * 5; // $5 per player
+  };
+
+  const calculateDiscount = () => {
+    if (!appliedCoupon) return 0;
+    const subtotal = calculateSubtotal();
+    if (appliedCoupon.percentOff) {
+      return (subtotal * appliedCoupon.percentOff) / 100;
+    }
+    if (appliedCoupon.amountOff) {
+      return Math.min(appliedCoupon.amountOff, subtotal);
+    }
+    return 0;
+  };
 
   const calculateTotal = () => {
-    return bookingData.numberOfPlayers * 5; // $5 per player
+    return Math.max(0, calculateSubtotal() - calculateDiscount());
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!promoCode.trim()) return;
+    
+    setIsValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-coupon', {
+        body: { promoCode: promoCode.trim() }
+      });
+
+      if (error) throw error;
+
+      if (data.valid) {
+        setAppliedCoupon({
+          name: data.name,
+          percentOff: data.percentOff,
+          amountOff: data.amountOff,
+        });
+        toast({
+          title: "Promo Code Applied!",
+          description: `${data.name} - ${data.percentOff ? `${data.percentOff}% off` : `$${data.amountOff} off`}`,
+        });
+      } else {
+        toast({
+          title: "Invalid Promo Code",
+          description: data.error || "This promo code is not valid.",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Error validating coupon:', error);
+      toast({
+        title: "Error",
+        description: "Unable to validate promo code. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setPromoCode('');
   };
 
   const createPaymentIntent = async () => {
@@ -75,7 +142,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
 
   useEffect(() => {
     createPaymentIntent();
-  }, [bookingData, toast]);
+  }, [bookingData, toast, appliedCoupon]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -448,11 +515,17 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Concierge Fee ({bookingData.numberOfPlayers} × $5):</span>
-                    <span>${calculateTotal()}.00</span>
+                    <span>${calculateSubtotal()}.00</span>
                   </div>
+                  {appliedCoupon && calculateDiscount() > 0 && (
+                    <div className="flex justify-between text-primary">
+                      <span>Discount ({appliedCoupon.name}):</span>
+                      <span>-${calculateDiscount().toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total:</span>
-                    <span>${calculateTotal()}.00</span>
+                    <span>${calculateTotal().toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -497,13 +570,43 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                       <Tag className="w-4 h-4" />
                       <span>Promo Code (Optional)</span>
                     </Label>
-                    <Input
-                      id="promoCode"
-                      type="text"
-                      placeholder="Enter promo code"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                    />
+                    {appliedCoupon ? (
+                      <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-md">
+                        <div>
+                          <span className="font-medium text-primary">{appliedCoupon.name}</span>
+                          <span className="text-sm text-muted-foreground ml-2">
+                            ({appliedCoupon.percentOff ? `${appliedCoupon.percentOff}% off` : `$${appliedCoupon.amountOff} off`})
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRemoveCoupon}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          id="promoCode"
+                          type="text"
+                          placeholder="Enter promo code"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleApplyCoupon}
+                          disabled={!promoCode.trim() || isValidatingCoupon}
+                        >
+                          {isValidatingCoupon ? "..." : "Apply"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-start space-x-2 pt-4">
@@ -529,7 +632,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                     <p className="font-medium mb-1">Secure Payment Authorization</p>
                     <p className="text-muted-foreground">
                       Your payment information is encrypted and secure. We'll authorize your 
-                      card for ${calculateTotal()}.00 and charge it only after we confirm your 
+                      card for ${calculateTotal().toFixed(2)} and charge it only after we confirm your 
                       tee time booking.
                     </p>
                   </div>
@@ -545,7 +648,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                     ? "Authorizing..." 
                     : !clientSecret 
                     ? "Loading..." 
-                    : `Authorize Payment - $${calculateTotal()}.00`}
+                    : `Authorize Payment - $${calculateTotal().toFixed(2)}`}
                 </Button>
               </form>
             </CardContent>
