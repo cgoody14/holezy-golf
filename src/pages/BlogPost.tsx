@@ -17,6 +17,7 @@ interface BlogPost {
   featured_image_url: string | null;
   meta_description: string | null;
   tags: string[] | null;
+  citations: string | null;
 }
 
 const BlogPost = () => {
@@ -169,6 +170,16 @@ const BlogPost = () => {
             className="prose prose-lg max-w-none"
             dangerouslySetInnerHTML={{ __html: post.content.replace(/\n/g, '<br />') }}
           />
+
+          {post.citations && (
+            <div className="mt-12 pt-8 border-t border-border">
+              <h2 className="text-xl font-semibold mb-4">Sources & Citations</h2>
+              <div 
+                className="prose prose-sm max-w-none text-muted-foreground"
+                dangerouslySetInnerHTML={{ __html: post.citations.replace(/\n/g, '<br />') }}
+              />
+            </div>
+          )}
         </div>
       </article>
     </>

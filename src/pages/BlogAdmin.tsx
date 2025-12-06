@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ImageUpload } from "@/components/ImageUpload";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 const BlogAdmin = () => {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ const BlogAdmin = () => {
     featured_image_url: "",
     meta_description: "",
     tags: "",
+    citations: "",
     status: "draft" as "draft" | "published" | "scheduled",
     scheduled_at: "",
   });
@@ -94,6 +96,7 @@ const BlogAdmin = () => {
           featured_image_url: data.featured_image_url || "",
           meta_description: data.meta_description || "",
           tags: data.tags?.join(", ") || "",
+          citations: data.citations || "",
           status: (data.status as "draft" | "published" | "scheduled") || "draft",
           scheduled_at: data.published_at ? new Date(data.published_at).toISOString().slice(0, 16) : "",
         });
@@ -152,6 +155,7 @@ const BlogAdmin = () => {
         featured_image_url: formData.featured_image_url || null,
         meta_description: formData.meta_description || null,
         tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : null,
+        citations: formData.citations || null,
         status,
         author_id: user.id,
         author_name: user.user_metadata?.first_name 
@@ -246,10 +250,9 @@ const BlogAdmin = () => {
 
             <div className="space-y-2">
               <Label htmlFor="content">Content *</Label>
-              <Textarea
-                id="content"
+              <RichTextEditor
                 value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                onChange={(content) => setFormData({ ...formData, content })}
                 placeholder="Write your post content here..."
                 rows={15}
               />
@@ -272,6 +275,16 @@ const BlogAdmin = () => {
                 placeholder="SEO description (max 160 characters)"
                 rows={2}
                 maxLength={160}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="citations">Citations / Sources</Label>
+              <RichTextEditor
+                value={formData.citations}
+                onChange={(citations) => setFormData({ ...formData, citations })}
+                placeholder="Add your sources and citations here..."
+                rows={6}
               />
             </div>
 
