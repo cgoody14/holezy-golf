@@ -3,11 +3,16 @@ import { Calendar, Clock, Users, MapPin, Star, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import SignupCounter from '@/components/SignupCounter';
+import SEOHead, { combinedHomeStructuredData } from '@/components/SEOHead';
 import golfHeroImage from '@/assets/golf-hero.jpg';
 
 const Home = () => {
   return (
     <div className="min-h-screen">
+      <SEOHead 
+        canonicalUrl="/"
+        structuredData={combinedHomeStructuredData}
+      />
       {/* Hero Section */}
       <section className="relative text-white py-20 px-4 overflow-hidden">
         <div 
