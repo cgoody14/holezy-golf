@@ -477,7 +477,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                     <span>Date:</span>
                   </span>
                   <span className="font-medium">
-                    {new Date(bookingData.date).toLocaleDateString('en-US', {
+                    {new Date(bookingData.date + 'T00:00:00').toLocaleDateString('en-US', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
