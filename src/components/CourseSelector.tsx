@@ -22,9 +22,10 @@ interface CustomCourse {
 interface CourseSelectorProps {
   selectedCourse: string;
   onCourseSelect: (courseName: string) => void;
+  stateFilter?: string | null;
 }
 
-const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps) => {
+const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseSelectorProps) => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -93,6 +94,14 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
         .select('"Course Name", "Address", "Facility ID"')
         .not('"Course Name"', 'is', null);
       
+      // Filter by state if provided
+      if (stateFilter) {
+        // Match state abbreviation in address (e.g., ", CA" or ", CA ")
+        query = query.or(
+          `"Address".ilike.%, ${stateFilter}%,"Address".ilike.%, ${stateFilter} %,"Address".ilike.%${stateFilter},%`
+        );
+      }
+      
       // Enhanced search - search in both course name and address
       if (searchQuery && searchQuery.trim()) {
         query = query.or(
@@ -129,7 +138,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect }: CourseSelectorProps)
 
   useEffect(() => {
     loadCourses(0, true);
-  }, []);
+  }, [stateFilter]);
 
   const handleCourseSelect = (courseName: string) => {
     if (courseName === 'Other') {

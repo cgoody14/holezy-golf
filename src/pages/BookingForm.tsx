@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Clock, Users, MapPin, Phone, Mail, User } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Phone, Mail, User, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import CourseSelector from '@/components/CourseSelector';
 import AuthDialog from '@/components/AuthDialog';
+import StateSelectionDialog from '@/components/StateSelectionDialog';
+import { Badge } from '@/components/ui/badge';
 
 export interface BookingData {
   firstName: string;
@@ -27,6 +29,8 @@ const BookingForm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [showStateDialog, setShowStateDialog] = useState(false);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
   const [user, setUser] = useState(null);
   
   const [formData, setFormData] = useState<BookingData>({
@@ -43,6 +47,11 @@ const BookingForm = () => {
 
   useEffect(() => {
     checkAuth();
+    // Load selected state from session storage
+    const storedState = sessionStorage.getItem('selectedState');
+    if (storedState) {
+      setSelectedState(storedState);
+    }
   }, []);
 
   const checkAuth = async () => {
@@ -235,6 +244,37 @@ const BookingForm = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Get state name from code
+  const getStateName = (code: string) => {
+    const states: Record<string, string> = {
+      'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+      'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+      'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+      'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+      'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+      'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+      'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+      'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+      'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+      'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+      'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+      'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+      'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
+    };
+    return states[code] || code;
+  };
+
+  const handleChangeState = () => {
+    setShowStateDialog(true);
+  };
+
+  const clearStateFilter = () => {
+    setSelectedState(null);
+    sessionStorage.removeItem('selectedState');
+    // Clear selected course when state changes
+    updateFormData('preferredCourse', '');
+  };
+
   // Get today's date for min date validation
   const today = new Date().toISOString().split('T')[0];
 
@@ -246,6 +286,31 @@ const BookingForm = () => {
           <p className="text-lg text-muted-foreground">
             Tell us your preferences and we'll handle the rest
           </p>
+          
+          {/* State Filter Indicator */}
+          {selectedState && (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <Badge variant="secondary" className="text-sm py-1 px-3 flex items-center gap-2">
+                <MapPin className="w-3 h-3" />
+                Showing courses in {getStateName(selectedState)}
+                <button 
+                  onClick={clearStateFilter}
+                  className="ml-1 hover:text-destructive transition-colors"
+                  aria-label="Clear state filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleChangeState}
+                className="text-xs"
+              >
+                Change State
+              </Button>
+            </div>
+          )}
         </div>
 
         <Card className="golf-card-shadow">
@@ -430,6 +495,7 @@ const BookingForm = () => {
                   <CourseSelector
                     selectedCourse={formData.preferredCourse}
                     onCourseSelect={(courseName) => updateFormData('preferredCourse', courseName)}
+                    stateFilter={selectedState}
                   />
                 </div>
               </div>
@@ -454,6 +520,15 @@ const BookingForm = () => {
           onSuccess={() => {
             checkAuth();
             navigate('/checkout');
+          }}
+        />
+
+        <StateSelectionDialog
+          isOpen={showStateDialog}
+          onClose={() => setShowStateDialog(false)}
+          onStateSelect={(stateCode) => {
+            setSelectedState(stateCode);
+            updateFormData('preferredCourse', '');
           }}
         />
       </div>
