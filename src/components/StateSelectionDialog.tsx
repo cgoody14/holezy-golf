@@ -166,7 +166,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg md:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             {selectedState ? (
