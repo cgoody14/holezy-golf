@@ -461,18 +461,17 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
 
               {/* Time Window */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <Clock className="h-4 w-4 text-primary" />
-                    Time Window
-                  </label>
-                  <span className="text-sm font-medium">
-                    {minutesToTimeString(bookingDetails.earliestTime)} - {minutesToTimeString(bookingDetails.latestTime)}
-                  </span>
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Time Window
+                </label>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                  <span>Earliest</span>
+                  <span>Latest</span>
                 </div>
 
-                <div className="flex gap-3 items-center">
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">6 AM</span>
+                <div className="relative">
                   <Slider
                     value={[bookingDetails.earliestTime, bookingDetails.latestTime]}
                     onValueChange={(values) => {
@@ -488,7 +487,12 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
                     minStepsBetweenThumbs={1}
                     className="flex-1"
                   />
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">9 PM</span>
+                </div>
+
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <span>{minutesToTimeString(bookingDetails.earliestTime)}</span>
+                  <span className="text-xs text-muted-foreground">6 AM - 9 PM</span>
+                  <span>{minutesToTimeString(bookingDetails.latestTime)}</span>
                 </div>
               </div>
 
