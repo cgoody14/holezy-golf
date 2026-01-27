@@ -192,6 +192,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
   const handleCourseSelect = (courseName: string) => {
     setSelectedCourse(courseName);
     sessionStorage.setItem('selectedCourse', courseName);
+    setIsCalendarOpen(false);
     setStep('details');
   };
 
@@ -286,7 +287,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg md:max-w-xl">
+      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             {getTitle()}
