@@ -97,16 +97,14 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
   }, [searchTerm]);
 
   // Load courses when state is selected
-  const loadCourses = useCallback(async (stateCode: string, searchQuery?: string) => {
+  const loadCourses = useCallback(async (stateName: string, searchQuery?: string) => {
     setIsLoading(true);
     try {
       let query = supabase
         .from('Course_Database')
         .select('"Course Name", "Address", "Facility ID"')
         .not('"Course Name"', 'is', null)
-        .or(
-          `"Address".ilike.%, ${stateCode}%,"Address".ilike.%, ${stateCode} %,"Address".ilike.%${stateCode},%`
-        );
+        .ilike('"Address"', `%${stateName}%`);
 
       if (searchQuery && searchQuery.trim()) {
         query = query.or(
@@ -131,7 +129,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
   // Load courses when state changes or search changes
   useEffect(() => {
     if (selectedState) {
-      loadCourses(selectedState.code, courseSearchTerm);
+      loadCourses(selectedState.name, courseSearchTerm);
     }
   }, [selectedState, courseSearchTerm, loadCourses]);
 
