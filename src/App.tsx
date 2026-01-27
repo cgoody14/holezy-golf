@@ -21,6 +21,7 @@ const BlogPost = lazy(() => import("./pages/BlogPost"));
 const BlogAdmin = lazy(() => import("./pages/BlogAdmin"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const FAQ = lazy(() => import("./components/FAQ"));
+const Courses = lazy(() => import("./pages/Courses"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -65,6 +66,7 @@ const App = () => (
                 <Route path="/blog/admin" element={<BlogAdmin />} />
                 <Route path="/admin-setup" element={<AdminSetup />} />
                 <Route path="/faq" element={<div className="py-12 px-4"><FAQ /></div>} />
+                <Route path="/courses" element={<Courses />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
