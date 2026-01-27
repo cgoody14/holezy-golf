@@ -12,11 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -434,20 +429,20 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
                   <CalendarIcon className="h-4 w-4 text-primary" />
                   Preferred Date
                 </label>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !bookingDetails.date && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {bookingDetails.date ? format(bookingDetails.date, "PPP") : "Select a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-50" align="start">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !bookingDetails.date && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {bookingDetails.date ? format(bookingDetails.date, "PPP") : "Select a date"}
+                </Button>
+                {isCalendarOpen && (
+                  <div className="border rounded-lg p-3 bg-background">
                     <Calendar
                       mode="single"
                       selected={bookingDetails.date}
@@ -457,54 +452,53 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
                       }}
                       disabled={(date) => date < new Date()}
                       initialFocus
-                      className={cn("p-3 pointer-events-auto")}
+                      className={cn("p-0 pointer-events-auto")}
                     />
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                )}
               </div>
 
               {/* Time Window */}
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <Clock className="h-4 w-4 text-primary" />
                   Time Window
                 </label>
 
-                {/* Earliest Time */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Earliest Time</span>
-                    <span className="font-medium">{minutesToTimeString(bookingDetails.earliestTime)}</span>
+                <div className="flex gap-4 items-center">
+                  {/* Earliest Time */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Earliest</span>
+                      <span className="font-medium">{minutesToTimeString(bookingDetails.earliestTime)}</span>
+                    </div>
+                    <Slider
+                      value={[bookingDetails.earliestTime]}
+                      onValueChange={handleEarliestTimeChange}
+                      min={360}
+                      max={1260}
+                      step={30}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[bookingDetails.earliestTime]}
-                    onValueChange={handleEarliestTimeChange}
-                    min={360} // 6:00 AM
-                    max={1260} // 9:00 PM
-                    step={30}
-                    className="w-full"
-                  />
-                </div>
 
-                {/* Latest Time */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Latest Time</span>
-                    <span className="font-medium">{minutesToTimeString(bookingDetails.latestTime)}</span>
+                  <span className="text-muted-foreground text-sm">to</span>
+
+                  {/* Latest Time */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Latest</span>
+                      <span className="font-medium">{minutesToTimeString(bookingDetails.latestTime)}</span>
+                    </div>
+                    <Slider
+                      value={[bookingDetails.latestTime]}
+                      onValueChange={handleLatestTimeChange}
+                      min={360}
+                      max={1260}
+                      step={30}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[bookingDetails.latestTime]}
-                    onValueChange={handleLatestTimeChange}
-                    min={360} // 6:00 AM
-                    max={1260} // 9:00 PM
-                    step={30}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Time Range Display */}
-                <div className="text-center text-sm text-muted-foreground bg-muted/30 py-2 rounded-lg">
-                  {minutesToTimeString(bookingDetails.earliestTime)} - {minutesToTimeString(bookingDetails.latestTime)}
                 </div>
               </div>
 
