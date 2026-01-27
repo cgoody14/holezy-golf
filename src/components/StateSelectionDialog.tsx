@@ -1,20 +1,37 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, ChevronRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { Search, MapPin, ChevronRight, ArrowLeft, Loader2, CalendarIcon, Clock, Users } from 'lucide-react';
+import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Slider } from '@/components/ui/slider';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface Course {
   "Course Name": string;
   "Address"?: string;
   "Facility ID"?: number;
+}
+
+interface BookingDetails {
+  players: number;
+  date: Date | undefined;
+  earliestTime: number; // minutes from midnight
+  latestTime: number;
 }
 
 interface StateSelectionDialogProps {
@@ -77,12 +94,32 @@ const US_STATES = [
   { code: 'DC', name: 'District of Columbia' },
 ];
 
+// Convert minutes from midnight to time string (e.g., 360 -> "6:00 AM")
+const minutesToTimeString = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
+};
+
+type Step = 'state' | 'course' | 'details';
+
 const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelectionDialogProps) => {
+  const [step, setStep] = useState<Step>('state');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState<{ code: string; name: string } | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [courseSearchTerm, setCourseSearchTerm] = useState('');
+  const [bookingDetails, setBookingDetails] = useState<BookingDetails>({
+    players: 1,
+    date: undefined,
+    earliestTime: 360, // 6:00 AM
+    latestTime: 1260, // 9:00 PM
+  });
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const navigate = useNavigate();
 
   // Filter states based on search
@@ -128,28 +165,62 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
 
   // Load courses when state changes or search changes
   useEffect(() => {
-    if (selectedState) {
+    if (selectedState && step === 'course') {
       loadCourses(selectedState.name, courseSearchTerm);
     }
-  }, [selectedState, courseSearchTerm, loadCourses]);
+  }, [selectedState, courseSearchTerm, loadCourses, step]);
 
   // Reset state when dialog closes
   useEffect(() => {
     if (!isOpen) {
+      setStep('state');
       setSelectedState(null);
+      setSelectedCourse(null);
       setSearchTerm('');
       setCourseSearchTerm('');
       setCourses([]);
+      setBookingDetails({
+        players: 1,
+        date: undefined,
+        earliestTime: 360,
+        latestTime: 1260,
+      });
     }
   }, [isOpen]);
 
   const handleStateSelect = (state: { code: string; name: string }) => {
     setSelectedState(state);
     sessionStorage.setItem('selectedState', state.code);
+    setStep('course');
   };
 
   const handleCourseSelect = (courseName: string) => {
+    setSelectedCourse(courseName);
     sessionStorage.setItem('selectedCourse', courseName);
+    setStep('details');
+  };
+
+  const handleBack = () => {
+    if (step === 'details') {
+      setStep('course');
+      setSelectedCourse(null);
+    } else if (step === 'course') {
+      setStep('state');
+      setSelectedState(null);
+      setCourseSearchTerm('');
+      setCourses([]);
+    }
+  };
+
+  const handleContinue = () => {
+    // Store booking details in session storage
+    sessionStorage.setItem('bookingDetails', JSON.stringify({
+      ...bookingDetails,
+      date: bookingDetails.date?.toISOString(),
+      earliestTimeStr: minutesToTimeString(bookingDetails.earliestTime),
+      latestTimeStr: minutesToTimeString(bookingDetails.latestTime),
+    }));
+    
     onClose();
     if (onStateSelect) {
       onStateSelect(selectedState!.code);
@@ -158,10 +229,64 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
     }
   };
 
-  const handleBack = () => {
-    setSelectedState(null);
-    setCourseSearchTerm('');
-    setCourses([]);
+  const handleEarliestTimeChange = (value: number[]) => {
+    const newEarliest = value[0];
+    setBookingDetails(prev => ({
+      ...prev,
+      earliestTime: newEarliest,
+      // Ensure latest is at least 30 min after earliest
+      latestTime: Math.max(prev.latestTime, newEarliest + 30),
+    }));
+  };
+
+  const handleLatestTimeChange = (value: number[]) => {
+    const newLatest = value[0];
+    setBookingDetails(prev => ({
+      ...prev,
+      latestTime: newLatest,
+      // Ensure earliest is at least 30 min before latest
+      earliestTime: Math.min(prev.earliestTime, newLatest - 30),
+    }));
+  };
+
+  const getTitle = () => {
+    switch (step) {
+      case 'state':
+        return (
+          <>
+            <MapPin className="h-5 w-5 text-primary" />
+            Select Your State
+          </>
+        );
+      case 'course':
+        return (
+          <>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="p-1 rounded-md hover:bg-muted transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <MapPin className="h-5 w-5 text-primary" />
+            Courses in {selectedState?.name}
+          </>
+        );
+      case 'details':
+        return (
+          <>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="p-1 rounded-md hover:bg-muted transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <CalendarIcon className="h-5 w-5 text-primary" />
+            Booking Details
+          </>
+        );
+    }
   };
 
   return (
@@ -169,103 +294,230 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
       <DialogContent className="sm:max-w-lg md:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            {selectedState ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="p-1 rounded-md hover:bg-muted transition-colors"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-                <MapPin className="h-5 w-5 text-primary" />
-                Courses in {selectedState.name}
-              </>
-            ) : (
-              <>
-                <MapPin className="h-5 w-5 text-primary" />
-                Select Your State
-              </>
-            )}
+            {getTitle()}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder={selectedState ? "Search courses..." : "Search states..."}
-              value={selectedState ? courseSearchTerm : searchTerm}
-              onChange={(e) => selectedState ? setCourseSearchTerm(e.target.value) : setSearchTerm(e.target.value)}
-              className="pl-10"
-              autoFocus
-            />
-          </div>
+          {step === 'state' && (
+            <>
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search states..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  autoFocus
+                />
+              </div>
 
-          {/* States or Courses List */}
-          <ScrollArea className="h-[500px] pr-4">
-            {selectedState ? (
-              // Courses View
-              <div className="space-y-1">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    <span className="ml-2 text-muted-foreground">Loading courses...</span>
-                  </div>
-                ) : courses.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {courseSearchTerm
-                      ? `No courses found matching "${courseSearchTerm}"`
-                      : `No courses found in ${selectedState.name}`}
-                  </div>
-                ) : (
-                  courses.map((course, index) => (
+              {/* States List */}
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-1">
+                  {filteredStates.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No states found matching "{searchTerm}"
+                    </div>
+                  ) : (
+                    filteredStates.map((state) => (
+                      <button
+                        key={state.code}
+                        type="button"
+                        onClick={() => handleStateSelect(state)}
+                        className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
+                            {state.code}
+                          </span>
+                          <span className="font-medium">{state.name}</span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+
+          {step === 'course' && (
+            <>
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search courses..."
+                  value={courseSearchTerm}
+                  onChange={(e) => setCourseSearchTerm(e.target.value)}
+                  className="pl-10"
+                  autoFocus
+                />
+              </div>
+
+              {/* Courses List */}
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-1">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="ml-2 text-muted-foreground">Loading courses...</span>
+                    </div>
+                  ) : courses.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {courseSearchTerm
+                        ? `No courses found matching "${courseSearchTerm}"`
+                        : `No courses found in ${selectedState?.name}`}
+                    </div>
+                  ) : (
+                    courses.map((course, index) => (
+                      <button
+                        key={`${course["Facility ID"]}-${index}`}
+                        type="button"
+                        onClick={() => handleCourseSelect(course["Course Name"]!)}
+                        className="w-full flex flex-col p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
+                      >
+                        <span className="font-medium truncate">{course["Course Name"]}</span>
+                        {course["Address"] && (
+                          <span className="text-sm text-muted-foreground truncate">
+                            {course["Address"]}
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+
+          {step === 'details' && (
+            <div className="space-y-6">
+              {/* Selected Course Display */}
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">Selected Course</span>
+                <p className="font-medium truncate">{selectedCourse}</p>
+              </div>
+
+              {/* Number of Players */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Users className="h-4 w-4 text-primary" />
+                  Number of Players
+                </label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map((num) => (
                     <button
-                      key={`${course["Facility ID"]}-${index}`}
+                      key={num}
                       type="button"
-                      onClick={() => handleCourseSelect(course["Course Name"]!)}
-                      className="w-full flex flex-col p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
-                    >
-                      <span className="font-medium truncate">{course["Course Name"]}</span>
-                      {course["Address"] && (
-                        <span className="text-sm text-muted-foreground truncate">
-                          {course["Address"]}
-                        </span>
+                      onClick={() => setBookingDetails(prev => ({ ...prev, players: num }))}
+                      className={cn(
+                        "flex-1 py-3 rounded-lg font-medium transition-colors border",
+                        bookingDetails.players === num
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted/50 border-input"
                       )}
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : (
-              // States View
-              <div className="space-y-1">
-                {filteredStates.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No states found matching "{searchTerm}"
-                  </div>
-                ) : (
-                  filteredStates.map((state) => (
-                    <button
-                      key={state.code}
-                      type="button"
-                      onClick={() => handleStateSelect(state)}
-                      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
-                          {state.code}
-                        </span>
-                        <span className="font-medium">{state.name}</span>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      {num}
                     </button>
-                  ))
-                )}
+                  ))}
+                </div>
               </div>
-            )}
-          </ScrollArea>
+
+              {/* Preferred Date */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <CalendarIcon className="h-4 w-4 text-primary" />
+                  Preferred Date
+                </label>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !bookingDetails.date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {bookingDetails.date ? format(bookingDetails.date, "PPP") : "Select a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-50" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={bookingDetails.date}
+                      onSelect={(date) => {
+                        setBookingDetails(prev => ({ ...prev, date }));
+                        setIsCalendarOpen(false);
+                      }}
+                      disabled={(date) => date < new Date()}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Time Window */}
+              <div className="space-y-4">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Time Window
+                </label>
+
+                {/* Earliest Time */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Earliest Time</span>
+                    <span className="font-medium">{minutesToTimeString(bookingDetails.earliestTime)}</span>
+                  </div>
+                  <Slider
+                    value={[bookingDetails.earliestTime]}
+                    onValueChange={handleEarliestTimeChange}
+                    min={360} // 6:00 AM
+                    max={1260} // 9:00 PM
+                    step={30}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Latest Time */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Latest Time</span>
+                    <span className="font-medium">{minutesToTimeString(bookingDetails.latestTime)}</span>
+                  </div>
+                  <Slider
+                    value={[bookingDetails.latestTime]}
+                    onValueChange={handleLatestTimeChange}
+                    min={360} // 6:00 AM
+                    max={1260} // 9:00 PM
+                    step={30}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Time Range Display */}
+                <div className="text-center text-sm text-muted-foreground bg-muted/30 py-2 rounded-lg">
+                  {minutesToTimeString(bookingDetails.earliestTime)} - {minutesToTimeString(bookingDetails.latestTime)}
+                </div>
+              </div>
+
+              {/* Continue Button */}
+              <Button
+                onClick={handleContinue}
+                className="w-full"
+                disabled={!bookingDetails.date}
+              >
+                Continue to Booking
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
