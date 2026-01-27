@@ -1,12 +1,14 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
 import { Calendar, Clock, Users, MapPin, Star, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import SignupCounter from '@/components/SignupCounter';
 import SEOHead, { combinedHomeStructuredData } from '@/components/SEOHead';
+import StateSelectionDialog from '@/components/StateSelectionDialog';
 import golfHeroImage from '@/assets/golf-hero.jpg';
 
 const Home = () => {
+  const [showStateDialog, setShowStateDialog] = useState(false);
   return (
     <div className="min-h-screen">
       <SEOHead 
@@ -27,11 +29,13 @@ const Home = () => {
           <p className="text-xl md:text-2xl mb-8 opacity-90">
             Tell us when and where you want to play, and we'll do the booking for you.
           </p>
-          <Link to="/book">
-            <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100">
-              Book My Tee Time
-            </Button>
-          </Link>
+          <Button 
+            size="lg" 
+            className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100"
+            onClick={() => setShowStateDialog(true)}
+          >
+            Book My Tee Time
+          </Button>
         </div>
       </section>
 
@@ -199,11 +203,13 @@ const Home = () => {
                   <p className="text-lg">Confirmation email with all details</p>
                 </div>
               </div>
-              <Link to="/book" className="inline-block mt-8">
-                <Button size="lg" className="text-lg px-8 py-6">
-                  Let's Get Playing
-                </Button>
-              </Link>
+              <Button 
+                size="lg" 
+                className="text-lg px-8 py-6 mt-8"
+                onClick={() => setShowStateDialog(true)}
+              >
+                Let's Get Playing
+              </Button>
             </div>
             <div className="bg-muted/30 rounded-lg p-8">
               <div className="text-center">
@@ -227,13 +233,20 @@ const Home = () => {
           <p className="text-xl text-white/90 mb-8">
             Join thousands of golfers who've simplified their booking experience.
           </p>
-          <Link to="/book">
-            <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100">
-              Secure My Spot
-            </Button>
-          </Link>
+          <Button 
+            size="lg" 
+            className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100"
+            onClick={() => setShowStateDialog(true)}
+          >
+            Secure My Spot
+          </Button>
         </div>
       </section>
+
+      <StateSelectionDialog 
+        isOpen={showStateDialog} 
+        onClose={() => setShowStateDialog(false)} 
+      />
     </div>
   );
 };
