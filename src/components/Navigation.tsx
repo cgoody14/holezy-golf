@@ -79,6 +79,16 @@ const handleSignOut = async () => {
             >
               Home
             </Link>
+            <Link
+              to="/courses"
+              className={`font-medium transition-colors ${
+                isActive('/courses') 
+                  ? 'text-primary border-b-2 border-primary pb-1' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Courses
+            </Link>
             <button
               onClick={() => setShowStateDialog(true)}
               className={`font-medium transition-colors ${
@@ -170,6 +180,15 @@ const handleSignOut = async () => {
               onClick={() => setIsMenuOpen(false)}
             >
               Home
+            </Link>
+            <Link
+              to="/courses"
+              className={`block font-medium transition-colors ${
+                isActive('/courses') ? 'text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Courses
             </Link>
             <button
               onClick={() => {
