@@ -9,13 +9,22 @@ import { supabase } from '@/integrations/supabase/client';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix for default marker icons in Leaflet with Vite
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+// Create a custom golf pin icon
+const golfPinIcon = new L.Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
+
+// Seeded random function for consistent pin placement
+const seededRandom = (seed: number) => {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+};
 
 interface Course {
   "Course Name": string;
@@ -130,13 +139,16 @@ const Courses = () => {
         setCourses((data as Course[]) || []);
         
         // Generate pseudo-coordinates for courses based on state center
-        // In production, you'd use actual geocoding or stored coordinates
-        const geocoded: GeocodedCourse[] = ((data as Course[]) || []).map((course, index) => ({
-          ...course,
-          // Spread courses around state center with some randomness
-          lat: selectedState.lat + (Math.random() - 0.5) * 2,
-          lng: selectedState.lng + (Math.random() - 0.5) * 2,
-        }));
+        // Uses seeded random for consistent pin placement
+        const geocoded: GeocodedCourse[] = ((data as Course[]) || []).map((course, index) => {
+          const seed = course["Facility ID"] || index;
+          return {
+            ...course,
+            // Spread courses around state center with seeded randomness
+            lat: selectedState.lat + (seededRandom(seed) - 0.5) * 3,
+            lng: selectedState.lng + (seededRandom(seed + 1000) - 0.5) * 4,
+          };
+        });
         setGeocodedCourses(geocoded);
       } catch (error) {
         console.error('Error loading courses:', error);
@@ -307,10 +319,11 @@ const Courses = () => {
                       <Marker
                         key={`marker-${course["Facility ID"]}-${index}`}
                         position={[course.lat, course.lng]}
+                        icon={golfPinIcon}
                       >
                         <Popup>
                           <div className="min-w-[200px]">
-                            <p className="font-semibold">{course["Course Name"]}</p>
+                            <p className="font-semibold text-foreground">{course["Course Name"]}</p>
                             {course["Address"] && (
                               <p className="text-sm text-muted-foreground mt-1">{course["Address"]}</p>
                             )}
