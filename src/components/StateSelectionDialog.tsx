@@ -442,7 +442,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
                   {bookingDetails.date ? format(bookingDetails.date, "PPP") : "Select a date"}
                 </Button>
                 {isCalendarOpen && (
-                  <div className="border rounded-lg p-3 bg-background">
+                  <div className="flex justify-center border rounded-lg p-3 bg-background">
                     <Calendar
                       mode="single"
                       selected={bookingDetails.date}
@@ -460,45 +460,34 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
 
               {/* Time Window */}
               <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Clock className="h-4 w-4 text-primary" />
-                  Time Window
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Clock className="h-4 w-4 text-primary" />
+                    Time Window
+                  </label>
+                  <span className="text-sm font-medium">
+                    {minutesToTimeString(bookingDetails.earliestTime)} - {minutesToTimeString(bookingDetails.latestTime)}
+                  </span>
+                </div>
 
-                <div className="flex gap-4 items-center">
-                  {/* Earliest Time */}
-                  <div className="flex-1 space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Earliest</span>
-                      <span className="font-medium">{minutesToTimeString(bookingDetails.earliestTime)}</span>
-                    </div>
-                    <Slider
-                      value={[bookingDetails.earliestTime]}
-                      onValueChange={handleEarliestTimeChange}
-                      min={360}
-                      max={1260}
-                      step={30}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <span className="text-muted-foreground text-sm">to</span>
-
-                  {/* Latest Time */}
-                  <div className="flex-1 space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Latest</span>
-                      <span className="font-medium">{minutesToTimeString(bookingDetails.latestTime)}</span>
-                    </div>
-                    <Slider
-                      value={[bookingDetails.latestTime]}
-                      onValueChange={handleLatestTimeChange}
-                      min={360}
-                      max={1260}
-                      step={30}
-                      className="w-full"
-                    />
-                  </div>
+                <div className="flex gap-3 items-center">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">6 AM</span>
+                  <Slider
+                    value={[bookingDetails.earliestTime, bookingDetails.latestTime]}
+                    onValueChange={(values) => {
+                      setBookingDetails(prev => ({
+                        ...prev,
+                        earliestTime: values[0],
+                        latestTime: values[1],
+                      }));
+                    }}
+                    min={360}
+                    max={1260}
+                    step={30}
+                    minStepsBetweenThumbs={1}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">9 PM</span>
                 </div>
               </div>
 
