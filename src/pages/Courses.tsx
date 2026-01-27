@@ -1,24 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Search, MapPin, ChevronRight, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 
-// Create a custom golf pin icon
-const golfPinIcon = new L.Icon({
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Dynamically import the map component to avoid SSR/React 18 context issues
+const CourseMap = lazy(() => import('@/components/CourseMap'));
 
 // Seeded random function for consistent pin placement
 const seededRandom = (seed: number) => {
@@ -92,6 +81,15 @@ const US_STATES = [
   { code: 'WY', name: 'Wyoming', lat: 42.755966, lng: -107.302490 },
   { code: 'DC', name: 'District of Columbia', lat: 38.897438, lng: -77.026817 },
 ];
+
+const MapLoader = () => (
+  <div className="h-full flex items-center justify-center bg-muted/20">
+    <div className="text-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+      <p className="text-muted-foreground">Loading map...</p>
+    </div>
+  </div>
+);
 
 const Courses = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -305,46 +303,13 @@ const Courses = () => {
               {/* Map */}
               <Card className="lg:col-span-2 golf-card-shadow overflow-hidden">
                 <div className="h-[540px]">
-                  <MapContainer
-                    center={[selectedState.lat, selectedState.lng]}
-                    zoom={7}
-                    style={{ height: '100%', width: '100%' }}
-                    key={selectedState.code}
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  <Suspense fallback={<MapLoader />}>
+                    <CourseMap
+                      center={[selectedState.lat, selectedState.lng]}
+                      courses={geocodedCourses}
+                      stateCode={selectedState.code}
                     />
-                    {geocodedCourses.map((course, index) => (
-                      <Marker
-                        key={`marker-${course["Facility ID"]}-${index}`}
-                        position={[course.lat, course.lng]}
-                        icon={golfPinIcon}
-                      >
-                        <Popup>
-                          <div className="min-w-[200px]">
-                            <p className="font-semibold text-foreground">{course["Course Name"]}</p>
-                            {course["Address"] && (
-                              <p className="text-sm text-muted-foreground mt-1">{course["Address"]}</p>
-                            )}
-                            {course["Phone"] && (
-                              <p className="text-sm mt-1">{course["Phone"]}</p>
-                            )}
-                            {course["Course Website"] && (
-                              <a
-                                href={course["Course Website"]}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-primary hover:underline mt-1 block"
-                              >
-                                Visit Website
-                              </a>
-                            )}
-                          </div>
-                        </Popup>
-                      </Marker>
-                    ))}
-                  </MapContainer>
+                  </Suspense>
                 </div>
               </Card>
             </div>
