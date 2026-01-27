@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Clock, Users, MapPin, Phone, Mail, User } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Phone, Mail, User, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import AuthDialog from '@/components/AuthDialog';
+import StateSelectionDialog from '@/components/StateSelectionDialog';
 import { format } from 'date-fns';
 
 export interface BookingData {
@@ -35,7 +36,10 @@ const BookingForm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [user, setUser] = useState(null);
+  const [storedDetails, setStoredDetails] = useState<StoredBookingDetails | null>(null);
+  const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
   const [bookingSummary, setBookingSummary] = useState<{
     course: string;
     date: string;
@@ -63,12 +67,19 @@ const BookingForm = () => {
 
   const loadBookingDetails = () => {
     const storedCourse = sessionStorage.getItem('selectedCourse');
-    const storedDetails = sessionStorage.getItem('bookingDetails');
+    const storedDetailsStr = sessionStorage.getItem('bookingDetails');
+    const storedState = sessionStorage.getItem('selectedState');
     
-    if (storedCourse && storedDetails) {
+    if (storedState) {
+      setSelectedStateCode(storedState);
+    }
+    
+    if (storedCourse && storedDetailsStr) {
       try {
-        const details: StoredBookingDetails = JSON.parse(storedDetails);
+        const details: StoredBookingDetails = JSON.parse(storedDetailsStr);
         const dateObj = new Date(details.date);
+        
+        setStoredDetails(details);
         
         setBookingSummary({
           course: storedCourse,
@@ -200,6 +211,27 @@ const BookingForm = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const US_STATES: Record<string, string> = {
+    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+    'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
+  };
+
+  const getStateFromCode = (code: string) => ({
+    code,
+    name: US_STATES[code] || code
+  });
+
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -214,10 +246,21 @@ const BookingForm = () => {
         {bookingSummary && (
           <Card className="mb-6 bg-primary/5 border-primary/20">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-primary" />
-                Your Selection
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  Your Selection
+                </CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowEditDialog(true)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-start justify-between gap-6">
@@ -342,6 +385,26 @@ const BookingForm = () => {
             navigate('/checkout');
           }}
         />
+
+        {selectedStateCode && storedDetails && (
+          <StateSelectionDialog
+            isOpen={showEditDialog}
+            onClose={() => setShowEditDialog(false)}
+            initialStep="course"
+            initialState={getStateFromCode(selectedStateCode)}
+            initialCourse={formData.preferredCourse}
+            initialBookingDetails={{
+              players: storedDetails.players,
+              date: storedDetails.date ? new Date(storedDetails.date) : undefined,
+              earliestTime: storedDetails.earliestTime,
+              latestTime: storedDetails.latestTime,
+            }}
+            onStateSelect={() => {
+              setShowEditDialog(false);
+              loadBookingDetails();
+            }}
+          />
+        )}
       </div>
     </div>
   );

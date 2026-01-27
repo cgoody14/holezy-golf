@@ -33,6 +33,10 @@ interface StateSelectionDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onStateSelect?: (stateCode: string) => void;
+  initialStep?: Step;
+  initialState?: { code: string; name: string };
+  initialCourse?: string;
+  initialBookingDetails?: BookingDetails;
 }
 
 const US_STATES = [
@@ -97,18 +101,25 @@ const minutesToTimeString = (minutes: number): string => {
   const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
   return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
 };
-
 type Step = 'state' | 'course' | 'details';
 
-const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelectionDialogProps) => {
-  const [step, setStep] = useState<Step>('state');
+const StateSelectionDialog = ({ 
+  isOpen, 
+  onClose, 
+  onStateSelect,
+  initialStep,
+  initialState,
+  initialCourse,
+  initialBookingDetails 
+}: StateSelectionDialogProps) => {
+  const [step, setStep] = useState<Step>(initialStep || 'state');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedState, setSelectedState] = useState<{ code: string; name: string } | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [selectedState, setSelectedState] = useState<{ code: string; name: string } | null>(initialState || null);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(initialCourse || null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [courseSearchTerm, setCourseSearchTerm] = useState('');
-  const [bookingDetails, setBookingDetails] = useState<BookingDetails>({
+  const [bookingDetails, setBookingDetails] = useState<BookingDetails>(initialBookingDetails || {
     players: 1,
     date: undefined,
     earliestTime: 360, // 6:00 AM
@@ -116,6 +127,16 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
   });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const navigate = useNavigate();
+
+  // Initialize state when dialog opens with initial values
+  useEffect(() => {
+    if (isOpen) {
+      if (initialStep) setStep(initialStep);
+      if (initialState) setSelectedState(initialState);
+      if (initialCourse) setSelectedCourse(initialCourse);
+      if (initialBookingDetails) setBookingDetails(initialBookingDetails);
+    }
+  }, [isOpen, initialStep, initialState, initialCourse, initialBookingDetails]);
 
   // Filter states based on search
   const filteredStates = useMemo(() => {
@@ -127,6 +148,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
         state.code.toLowerCase().includes(search)
     );
   }, [searchTerm]);
+
 
   // Load courses when state is selected
   const loadCourses = useCallback(async (stateName: string, searchQuery?: string) => {
