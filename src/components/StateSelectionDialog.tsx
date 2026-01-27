@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, ChevronRight } from 'lucide-react';
+import { Search, MapPin, ChevronRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -9,6 +9,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Course {
+  "Course Name": string;
+  "Address"?: string;
+  "Facility ID"?: number;
+}
 
 interface StateSelectionDialogProps {
   isOpen: boolean;
@@ -72,8 +79,13 @@ const US_STATES = [
 
 const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelectionDialogProps) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedState, setSelectedState] = useState<{ code: string; name: string } | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [courseSearchTerm, setCourseSearchTerm] = useState('');
   const navigate = useNavigate();
 
+  // Filter states based on search
   const filteredStates = useMemo(() => {
     if (!searchTerm.trim()) return US_STATES;
     const search = searchTerm.toLowerCase();
@@ -84,15 +96,74 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
     );
   }, [searchTerm]);
 
-  const handleStateSelect = (stateCode: string) => {
-    // Store selected state and navigate to booking form
-    sessionStorage.setItem('selectedState', stateCode);
+  // Load courses when state is selected
+  const loadCourses = useCallback(async (stateCode: string, searchQuery?: string) => {
+    setIsLoading(true);
+    try {
+      let query = supabase
+        .from('Course_Database')
+        .select('"Course Name", "Address", "Facility ID"')
+        .not('"Course Name"', 'is', null)
+        .or(
+          `"Address".ilike.%, ${stateCode}%,"Address".ilike.%, ${stateCode} %,"Address".ilike.%${stateCode},%`
+        );
+
+      if (searchQuery && searchQuery.trim()) {
+        query = query.or(
+          `"Course Name".ilike.%${searchQuery.trim()}%,"Address".ilike.%${searchQuery.trim()}%`
+        );
+      }
+
+      const { data, error } = await query
+        .order('"Course Name"')
+        .limit(100);
+
+      if (error) throw error;
+      setCourses(data || []);
+    } catch (error) {
+      console.error('Error loading courses:', error);
+      setCourses([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load courses when state changes or search changes
+  useEffect(() => {
+    if (selectedState) {
+      loadCourses(selectedState.code, courseSearchTerm);
+    }
+  }, [selectedState, courseSearchTerm, loadCourses]);
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedState(null);
+      setSearchTerm('');
+      setCourseSearchTerm('');
+      setCourses([]);
+    }
+  }, [isOpen]);
+
+  const handleStateSelect = (state: { code: string; name: string }) => {
+    setSelectedState(state);
+    sessionStorage.setItem('selectedState', state.code);
+  };
+
+  const handleCourseSelect = (courseName: string) => {
+    sessionStorage.setItem('selectedCourse', courseName);
     onClose();
     if (onStateSelect) {
-      onStateSelect(stateCode);
+      onStateSelect(selectedState!.code);
     } else {
       navigate('/book');
     }
+  };
+
+  const handleBack = () => {
+    setSelectedState(null);
+    setCourseSearchTerm('');
+    setCourses([]);
   };
 
   return (
@@ -100,8 +171,24 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <MapPin className="h-5 w-5 text-primary" />
-            Select Your State
+            {selectedState ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="p-1 rounded-md hover:bg-muted transition-colors"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <MapPin className="h-5 w-5 text-primary" />
+                Courses in {selectedState.name}
+              </>
+            ) : (
+              <>
+                <MapPin className="h-5 w-5 text-primary" />
+                Select Your State
+              </>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -111,40 +198,75 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search states..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={selectedState ? "Search courses..." : "Search states..."}
+              value={selectedState ? courseSearchTerm : searchTerm}
+              onChange={(e) => selectedState ? setCourseSearchTerm(e.target.value) : setSearchTerm(e.target.value)}
               className="pl-10"
               autoFocus
             />
           </div>
 
-          {/* States List */}
-          <ScrollArea className="h-[300px] pr-4">
-            <div className="space-y-1">
-              {filteredStates.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No states found matching "{searchTerm}"
-                </div>
-              ) : (
-                filteredStates.map((state) => (
-                  <button
-                    key={state.code}
-                    type="button"
-                    onClick={() => handleStateSelect(state.code)}
-                    className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
-                        {state.code}
-                      </span>
-                      <span className="font-medium">{state.name}</span>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </button>
-                ))
-              )}
-            </div>
+          {/* States or Courses List */}
+          <ScrollArea className="h-[350px] pr-4">
+            {selectedState ? (
+              // Courses View
+              <div className="space-y-1">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground">Loading courses...</span>
+                  </div>
+                ) : courses.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {courseSearchTerm
+                      ? `No courses found matching "${courseSearchTerm}"`
+                      : `No courses found in ${selectedState.name}`}
+                  </div>
+                ) : (
+                  courses.map((course, index) => (
+                    <button
+                      key={`${course["Facility ID"]}-${index}`}
+                      type="button"
+                      onClick={() => handleCourseSelect(course["Course Name"]!)}
+                      className="w-full flex flex-col p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
+                    >
+                      <span className="font-medium truncate">{course["Course Name"]}</span>
+                      {course["Address"] && (
+                        <span className="text-sm text-muted-foreground truncate">
+                          {course["Address"]}
+                        </span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : (
+              // States View
+              <div className="space-y-1">
+                {filteredStates.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No states found matching "{searchTerm}"
+                  </div>
+                ) : (
+                  filteredStates.map((state) => (
+                    <button
+                      key={state.code}
+                      type="button"
+                      onClick={() => handleStateSelect(state)}
+                      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
+                          {state.code}
+                        </span>
+                        <span className="font-medium">{state.name}</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </ScrollArea>
         </div>
       </DialogContent>
