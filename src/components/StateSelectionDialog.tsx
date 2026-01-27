@@ -471,7 +471,8 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
                   <span>Latest</span>
                 </div>
 
-                <div className="relative">
+                <div className="relative flex items-center">
+                  <div className="absolute left-0 w-3 h-3 rounded-full bg-primary z-10" />
                   <Slider
                     value={[bookingDetails.earliestTime, bookingDetails.latestTime]}
                     onValueChange={(values) => {
@@ -485,8 +486,9 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
                     max={1260}
                     step={30}
                     minStepsBetweenThumbs={1}
-                    className="flex-1"
+                    className="flex-1 mx-1"
                   />
+                  <div className="absolute right-0 w-3 h-3 rounded-full bg-primary z-10" />
                 </div>
 
                 <div className="flex items-center justify-between text-sm font-medium">
