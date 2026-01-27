@@ -202,7 +202,7 @@ const BookingForm = () => {
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">Book Your Tee Time</h1>
           <p className="text-lg text-muted-foreground">
@@ -220,28 +220,28 @@ const BookingForm = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-1">
+              <div className="flex items-start justify-between gap-6">
+                <div className="space-y-1 flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Course</p>
                   <p className="font-medium text-sm truncate">{bookingSummary.course}</p>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 shrink-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Date</p>
-                  <p className="font-medium text-sm flex items-center gap-1">
+                  <p className="font-medium text-sm flex items-center gap-1 whitespace-nowrap">
                     <Calendar className="w-3 h-3" />
                     {bookingSummary.date}
                   </p>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 shrink-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Players</p>
-                  <p className="font-medium text-sm flex items-center gap-1">
+                  <p className="font-medium text-sm flex items-center gap-1 whitespace-nowrap">
                     <Users className="w-3 h-3" />
                     {bookingSummary.players} Player{bookingSummary.players > 1 ? 's' : ''}
                   </p>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 shrink-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Time Window</p>
-                  <p className="font-medium text-sm flex items-center gap-1">
+                  <p className="font-medium text-sm flex items-center gap-1 whitespace-nowrap">
                     <Clock className="w-3 h-3" />
                     {bookingSummary.earliestTime} - {bookingSummary.latestTime}
                   </p>
