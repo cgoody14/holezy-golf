@@ -205,7 +205,7 @@ const StateSelectionDialog = ({ isOpen, onClose, onStateSelect }: StateSelection
           </div>
 
           {/* States or Courses List */}
-          <ScrollArea className="h-[350px] pr-4">
+          <ScrollArea className="h-[500px] pr-4">
             {selectedState ? (
               // Courses View
               <div className="space-y-1">
