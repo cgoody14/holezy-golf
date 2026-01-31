@@ -442,7 +442,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Booking Summary */}
           <Card className="golf-card-shadow">
             <CardHeader>
@@ -502,12 +502,12 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                   <span className="font-medium">{bookingData.numberOfPlayers}</span>
                 </div>
                 
-                <div className="flex justify-between items-start">
-                  <span className="text-muted-foreground flex items-center space-x-1">
-                    <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1">
+                  <span className="text-muted-foreground flex items-center space-x-1 shrink-0">
+                    <MapPin className="w-4 h-4 flex-shrink-0" />
                     <span>Course:</span>
                   </span>
-                  <span className="font-medium text-right">{bookingData.preferredCourse}</span>
+                  <span className="font-medium sm:text-right break-words">{bookingData.preferredCourse}</span>
                 </div>
                 
                 <Separator />

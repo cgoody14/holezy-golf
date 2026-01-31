@@ -309,14 +309,14 @@ const StateSelectionDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
+      <DialogContent className="max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             {getTitle()}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
           {step === 'state' && (
             <>
               {/* Search Bar */}
@@ -333,7 +333,7 @@ const StateSelectionDialog = ({
               </div>
 
               {/* States List */}
-              <ScrollArea className="h-[500px] pr-4">
+              <ScrollArea className="h-[50vh] sm:h-[500px] pr-4">
                 <div className="space-y-1">
                   {filteredStates.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
@@ -378,7 +378,7 @@ const StateSelectionDialog = ({
               </div>
 
               {/* Courses List */}
-              <ScrollArea className="h-[500px] pr-4">
+              <ScrollArea className="h-[50vh] sm:h-[500px] pr-4">
                 <div className="space-y-1">
                   {isLoading ? (
                     <div className="flex items-center justify-center py-12">

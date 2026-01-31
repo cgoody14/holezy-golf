@@ -504,10 +504,10 @@ const Profile = () => {
                                       <span className="font-medium">{booking.preferred_course}</span>
                                     </div>
                                     
-                                    <div className="flex items-center space-x-4">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                       <div className="flex items-center space-x-2">
-                                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                                        <span>
+                                        <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm">
                                           {new Date(booking.booking_date).toLocaleDateString('en-US', {
                                             weekday: 'short',
                                             month: 'short',
@@ -518,26 +518,26 @@ const Profile = () => {
                                       </div>
                                       
                                       <div className="flex items-center space-x-2">
-                                        <Clock className="w-4 h-4 text-muted-foreground" />
-                                        <span>
+                                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm">
                                           {formatTime(booking.earliest_time)} - {formatTime(booking.latest_time)}
                                         </span>
                                       </div>
                                       
                                       <div className="flex items-center space-x-2">
-                                        <Users className="w-4 h-4 text-muted-foreground" />
-                                        <span>{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
+                                        <Users className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm">{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
                                       </div>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                     <div className="flex items-center space-x-1">
-                                      <Phone className="w-3 h-3" />
-                                      <span>{booking.phone}</span>
+                                      <Phone className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{booking.phone}</span>
                                     </div>
                                     <div className="flex items-center space-x-1">
-                                      <CreditCard className="w-3 h-3" />
+                                      <CreditCard className="w-3 h-3 shrink-0" />
                                       <span>${booking.total_price}.00</span>
                                     </div>
                                     {booking.promo_code && (
@@ -616,10 +616,10 @@ const Profile = () => {
                                       <span className="font-medium">{booking.preferred_course}</span>
                                     </div>
                                     
-                                    <div className="flex items-center space-x-4">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                       <div className="flex items-center space-x-2">
-                                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                                        <span>
+                                        <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm">
                                           {new Date(booking.booking_date).toLocaleDateString('en-US', {
                                             weekday: 'short',
                                             month: 'short',
@@ -630,26 +630,26 @@ const Profile = () => {
                                       </div>
                                       
                                       <div className="flex items-center space-x-2">
-                                        <Clock className="w-4 h-4 text-muted-foreground" />
-                                        <span>
+                                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm">
                                           {formatTime(booking.earliest_time)} - {formatTime(booking.latest_time)}
                                         </span>
                                       </div>
                                       
                                       <div className="flex items-center space-x-2">
-                                        <Users className="w-4 h-4 text-muted-foreground" />
-                                        <span>{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
+                                        <Users className="w-4 h-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm">{booking.number_of_players} player{booking.number_of_players > 1 ? 's' : ''}</span>
                                       </div>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                     <div className="flex items-center space-x-1">
-                                      <Phone className="w-3 h-3" />
-                                      <span>{booking.phone}</span>
+                                      <Phone className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{booking.phone}</span>
                                     </div>
                                     <div className="flex items-center space-x-1">
-                                      <CreditCard className="w-3 h-3" />
+                                      <CreditCard className="w-3 h-3 shrink-0" />
                                       <span>${booking.total_price}.00</span>
                                     </div>
                                     {booking.promo_code && (

@@ -238,11 +238,11 @@ const Courses = () => {
         ) : (
           // Map View with Courses
           <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <Button variant="outline" onClick={handleBack}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <Button variant="outline" onClick={handleBack} className="shrink-0">
                 ← Back to States
               </Button>
-              <div className="relative flex-1 max-w-md">
+              <div className="relative flex-1 w-full sm:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
@@ -252,19 +252,32 @@ const Courses = () => {
                   className="pl-10"
                 />
               </div>
-              <span className="text-muted-foreground">
+              <span className="text-sm text-muted-foreground shrink-0">
                 {isLoading ? 'Loading...' : `${courses.length} courses found`}
               </span>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Map - Show first on mobile */}
+              <Card className="lg:col-span-2 golf-card-shadow overflow-hidden order-first lg:order-last">
+                <div className="h-[300px] sm:h-[400px] lg:h-[540px]">
+                  <Suspense fallback={<MapLoader />}>
+                    <CourseMap
+                      center={[selectedState.lat, selectedState.lng]}
+                      courses={geocodedCourses}
+                      stateCode={selectedState.code}
+                    />
+                  </Suspense>
+                </div>
+              </Card>
+
               {/* Course List */}
               <Card className="lg:col-span-1 golf-card-shadow">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg">Courses</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <ScrollArea className="h-[500px]">
+                  <ScrollArea className="h-[300px] sm:h-[400px] lg:h-[500px]">
                     {isLoading ? (
                       <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -298,19 +311,6 @@ const Courses = () => {
                     )}
                   </ScrollArea>
                 </CardContent>
-              </Card>
-
-              {/* Map */}
-              <Card className="lg:col-span-2 golf-card-shadow overflow-hidden">
-                <div className="h-[540px]">
-                  <Suspense fallback={<MapLoader />}>
-                    <CourseMap
-                      center={[selectedState.lat, selectedState.lng]}
-                      courses={geocodedCourses}
-                      stateCode={selectedState.code}
-                    />
-                  </Suspense>
-                </div>
               </Card>
             </div>
           </div>
