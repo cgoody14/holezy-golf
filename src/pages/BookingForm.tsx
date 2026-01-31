@@ -263,30 +263,30 @@ const BookingForm = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-start justify-between gap-6">
-                <div className="space-y-1 flex-1 min-w-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1 col-span-2 md:col-span-1">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Course</p>
                   <p className="font-medium text-sm truncate">{bookingSummary.course}</p>
                 </div>
-                <div className="space-y-1 shrink-0">
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Date</p>
-                  <p className="font-medium text-sm flex items-center gap-1 whitespace-nowrap">
-                    <Calendar className="w-3 h-3" />
-                    {bookingSummary.date}
+                  <p className="font-medium text-sm flex items-center gap-1">
+                    <Calendar className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{bookingSummary.date}</span>
                   </p>
                 </div>
-                <div className="space-y-1 shrink-0">
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Players</p>
-                  <p className="font-medium text-sm flex items-center gap-1 whitespace-nowrap">
-                    <Users className="w-3 h-3" />
+                  <p className="font-medium text-sm flex items-center gap-1">
+                    <Users className="w-3 h-3 shrink-0" />
                     {bookingSummary.players} Player{bookingSummary.players > 1 ? 's' : ''}
                   </p>
                 </div>
-                <div className="space-y-1 shrink-0">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Time Window</p>
-                  <p className="font-medium text-sm flex items-center gap-1 whitespace-nowrap">
-                    <Clock className="w-3 h-3" />
-                    {bookingSummary.earliestTime} - {bookingSummary.latestTime}
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Time</p>
+                  <p className="font-medium text-sm flex items-center gap-1">
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{bookingSummary.earliestTime} - {bookingSummary.latestTime}</span>
                   </p>
                 </div>
               </div>
