@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { Search, MapPin, ChevronRight, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, MapPin, ChevronRight, Loader2, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,12 +93,15 @@ const MapLoader = () => (
 );
 
 const Courses = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState<typeof US_STATES[0] | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [geocodedCourses, setGeocodedCourses] = useState<GeocodedCourse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [courseSearchTerm, setCourseSearchTerm] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState<GeocodedCourse | null>(null);
+  const courseListRef = useRef<HTMLDivElement>(null);
 
   // Filter states based on search
   const filteredStates = useMemo(() => {
@@ -163,6 +167,7 @@ const Courses = () => {
   const handleStateSelect = (state: typeof US_STATES[0]) => {
     setSelectedState(state);
     setCourseSearchTerm('');
+    setSelectedCourse(null);
   };
 
   const handleBack = () => {
@@ -170,6 +175,32 @@ const Courses = () => {
     setCourses([]);
     setGeocodedCourses([]);
     setCourseSearchTerm('');
+    setSelectedCourse(null);
+  };
+
+  const handleCourseSelect = (course: GeocodedCourse) => {
+    setSelectedCourse(course);
+  };
+
+  const handleMarkerClick = (course: GeocodedCourse) => {
+    setSelectedCourse(course);
+    // Scroll to the course in the list
+    const element = document.getElementById(`course-${course["Facility ID"]}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleBookCourse = () => {
+    if (selectedCourse && selectedState) {
+      navigate('/booking', {
+        state: {
+          preselectedState: selectedState.name,
+          preselectedCourse: selectedCourse["Course Name"],
+          preselectedFacilityId: selectedCourse["Facility ID"],
+        }
+      });
+    }
   };
 
   return (
@@ -238,6 +269,26 @@ const Courses = () => {
         ) : (
           // Map View with Courses
           <div className="space-y-6">
+            {/* Book button when course is selected */}
+            {selectedCourse && (
+              <Card className="bg-primary/5 border-primary/20">
+                <CardContent className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="font-semibold text-primary">{selectedCourse["Course Name"]}</p>
+                    {selectedCourse["Address"] && (
+                      <p className="text-sm text-muted-foreground">{selectedCourse["Address"]}</p>
+                    )}
+                  </div>
+                  <Button onClick={handleBookCourse} className="shrink-0 w-full sm:w-auto">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Book {selectedCourse["Course Name"].length > 20 
+                      ? selectedCourse["Course Name"].substring(0, 20) + '...' 
+                      : selectedCourse["Course Name"]}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
               <Button variant="outline" onClick={handleBack} className="shrink-0">
                 ← Back to States
@@ -266,6 +317,8 @@ const Courses = () => {
                       center={[selectedState.lat, selectedState.lng]}
                       courses={geocodedCourses}
                       stateCode={selectedState.code}
+                      selectedCourse={selectedCourse}
+                      onMarkerClick={handleMarkerClick}
                     />
                   </Suspense>
                 </div>
@@ -276,8 +329,8 @@ const Courses = () => {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg">Courses</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                  <ScrollArea className="h-[300px] sm:h-[400px] lg:h-[500px]">
+              <CardContent className="p-0">
+                  <ScrollArea className="h-[300px] sm:h-[400px] lg:h-[500px]" ref={courseListRef}>
                     {isLoading ? (
                       <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -289,24 +342,36 @@ const Courses = () => {
                       </div>
                     ) : (
                       <div className="divide-y">
-                        {courses.map((course, index) => (
-                          <div
-                            key={`${course["Facility ID"]}-${index}`}
-                            className="p-4 hover:bg-muted/50 transition-colors"
-                          >
-                            <p className="font-medium text-sm">{course["Course Name"]}</p>
-                            {course["Address"] && (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                {course["Address"]}
+                        {geocodedCourses.map((course, index) => {
+                          const isSelected = selectedCourse?.["Facility ID"] === course["Facility ID"];
+                          return (
+                            <button
+                              type="button"
+                              id={`course-${course["Facility ID"]}`}
+                              key={`${course["Facility ID"]}-${index}`}
+                              onClick={() => handleCourseSelect(course)}
+                              className={`w-full text-left p-4 transition-colors ${
+                                isSelected 
+                                  ? 'bg-primary/10 border-l-4 border-primary' 
+                                  : 'hover:bg-muted/50'
+                              }`}
+                            >
+                              <p className={`font-medium text-sm ${isSelected ? 'text-primary' : ''}`}>
+                                {course["Course Name"]}
                               </p>
-                            )}
-                            {course["Phone"] && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {course["Phone"]}
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                              {course["Address"] && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                  {course["Address"]}
+                                </p>
+                              )}
+                              {course["Phone"] && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {course["Phone"]}
+                                </p>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </ScrollArea>
