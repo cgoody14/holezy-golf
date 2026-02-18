@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, ChevronRight, Loader2, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,45 @@ import { supabase } from '@/integrations/supabase/client';
 // Dynamically import the map component to avoid SSR/React 18 context issues
 const CourseMap = lazy(() => import('@/components/CourseMap'));
 
-// Seeded random function for consistent pin placement
+// Geocode cache in localStorage
+const GEOCODE_CACHE_KEY = 'holezy_geocode_cache';
+
+const getGeocodeCache = (): Record<string, { lat: number; lng: number }> => {
+  try {
+    const cached = localStorage.getItem(GEOCODE_CACHE_KEY);
+    return cached ? JSON.parse(cached) : {};
+  } catch {
+    return {};
+  }
+};
+
+const setGeocodeCache = (cache: Record<string, { lat: number; lng: number }>) => {
+  try {
+    localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // localStorage full, ignore
+  }
+};
+
+const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number } | null> => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      { headers: { 'User-Agent': 'HolezyGolfApp/1.0' } }
+    );
+    const data = await response.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Seeded random fallback for courses that can't be geocoded
 const seededRandom = (seed: number) => {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -99,9 +137,11 @@ const Courses = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [geocodedCourses, setGeocodedCourses] = useState<GeocodedCourse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
   const [courseSearchTerm, setCourseSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState<GeocodedCourse | null>(null);
   const courseListRef = useRef<HTMLDivElement>(null);
+  const geocodeAbortRef = useRef(false);
 
   // Filter states based on search
   const filteredStates = useMemo(() => {
@@ -114,9 +154,56 @@ const Courses = () => {
     );
   }, [searchTerm]);
 
+  // Geocode courses progressively
+  const geocodeCourses = useCallback(async (coursesToGeocode: Course[], state: typeof US_STATES[0]) => {
+    const cache = getGeocodeCache();
+    setIsGeocoding(true);
+    geocodeAbortRef.current = false;
+
+    // First pass: apply cached coordinates or fallback
+    const initial: GeocodedCourse[] = coursesToGeocode.map((course, index) => {
+      const cacheKey = `${course["Facility ID"]}`;
+      if (cache[cacheKey]) {
+        return { ...course, lat: cache[cacheKey].lat, lng: cache[cacheKey].lng };
+      }
+      // Fallback to seeded random until geocoded
+      const seed = course["Facility ID"] || index;
+      return {
+        ...course,
+        lat: state.lat + (seededRandom(seed) - 0.5) * 3,
+        lng: state.lng + (seededRandom(seed + 1000) - 0.5) * 4,
+      };
+    });
+    setGeocodedCourses(initial);
+
+    // Second pass: geocode uncached courses
+    const uncached = coursesToGeocode
+      .map((c, i) => ({ course: c, index: i }))
+      .filter(({ course }) => !cache[`${course["Facility ID"]}`] && course["Address"]);
+
+    for (let i = 0; i < uncached.length; i++) {
+      if (geocodeAbortRef.current) break;
+      const { course, index } = uncached[i];
+      const result = await geocodeAddress(course["Address"]!);
+      if (result) {
+        cache[`${course["Facility ID"]}`] = result;
+        setGeocodeCache(cache);
+        setGeocodedCourses(prev => {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], lat: result.lat, lng: result.lng };
+          return updated;
+        });
+      }
+      // Nominatim rate limit: 1 req/sec
+      if (i < uncached.length - 1) await delay(1100);
+    }
+    setIsGeocoding(false);
+  }, []);
+
   // Load courses when state is selected
   useEffect(() => {
     if (!selectedState) return;
+    geocodeAbortRef.current = true; // abort any in-progress geocoding
 
     const loadCourses = async () => {
       setIsLoading(true);
@@ -138,20 +225,9 @@ const Courses = () => {
           .limit(200);
 
         if (error) throw error;
-        setCourses((data as Course[]) || []);
-        
-        // Generate pseudo-coordinates for courses based on state center
-        // Uses seeded random for consistent pin placement
-        const geocoded: GeocodedCourse[] = ((data as Course[]) || []).map((course, index) => {
-          const seed = course["Facility ID"] || index;
-          return {
-            ...course,
-            // Spread courses around state center with seeded randomness
-            lat: selectedState.lat + (seededRandom(seed) - 0.5) * 3,
-            lng: selectedState.lng + (seededRandom(seed + 1000) - 0.5) * 4,
-          };
-        });
-        setGeocodedCourses(geocoded);
+        const courseData = (data as Course[]) || [];
+        setCourses(courseData);
+        geocodeCourses(courseData, selectedState);
       } catch (error) {
         console.error('Error loading courses:', error);
         setCourses([]);
@@ -162,7 +238,7 @@ const Courses = () => {
     };
 
     loadCourses();
-  }, [selectedState, courseSearchTerm]);
+  }, [selectedState, courseSearchTerm, geocodeCourses]);
 
   const handleStateSelect = (state: typeof US_STATES[0]) => {
     setSelectedState(state);
@@ -304,7 +380,7 @@ const Courses = () => {
                 />
               </div>
               <span className="text-sm text-muted-foreground shrink-0">
-                {isLoading ? 'Loading...' : `${courses.length} courses found`}
+                {isLoading ? 'Loading...' : isGeocoding ? `${courses.length} courses (locating pins...)` : `${courses.length} courses found`}
               </span>
             </div>
 
