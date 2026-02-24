@@ -60,7 +60,7 @@ const CourseMap = ({ center, courses, stateCode, selectedCourse, onMarkerClick }
     <MapContainer
       center={center}
       zoom={7}
-      style={{ height: '100%', width: '100%' }}
+      style={{ height: '100%', width: '100%', zIndex: 0 }}
       key={stateCode}
     >
       <TileLayer

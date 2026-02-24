@@ -118,3 +118,7 @@ All colors MUST be HSL.
     box-shadow: 0 10px 30px -10px hsl(var(--primary) / 0.2);
   }
 }
+
+.leaflet-container {
+  z-index: 0 !important;
+}
