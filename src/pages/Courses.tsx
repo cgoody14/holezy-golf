@@ -170,8 +170,8 @@ const Courses = () => {
       const seed = course["Facility ID"] || index;
       return {
         ...course,
-        lat: state.lat + (seededRandom(seed) - 0.5) * 3,
-        lng: state.lng + (seededRandom(seed + 1000) - 0.5) * 4,
+        lat: state.lat + (seededRandom(seed) - 0.5) * 0.8,
+        lng: state.lng + (seededRandom(seed + 1000) - 0.5) * 1.0,
       };
     });
     setGeocodedCourses(initial);
