@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, lazy, Suspense, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { STATE_NAME_TO_SLUG, STATE_SEO_DATA } from '@/data/seoContent';
 import { Search, MapPin, ChevronRight, Loader2, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -259,6 +260,12 @@ const Courses = () => {
   }, [selectedState, courseSearchTerm, geocodeCourses]);
 
   const handleStateSelect = (state: typeof US_STATES[0]) => {
+    // If this state has an SEO page, redirect there
+    const slug = STATE_NAME_TO_SLUG[state.name];
+    if (slug) {
+      navigate(`/golf-courses/${slug}`);
+      return;
+    }
     setSelectedState(state);
     setCourseSearchTerm('');
     setSelectedCourse(null);
@@ -310,6 +317,20 @@ const Courses = () => {
         </div>
 
         {!selectedState ? (
+          <div className="space-y-8">
+            {/* Featured SEO State Links */}
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-xl font-semibold mb-4 text-center">Popular Golf Destinations</h2>
+              <div className="grid sm:grid-cols-3 gap-3">
+                {STATE_SEO_DATA.map(state => (
+                  <Link key={state.slug} to={`/golf-courses/${state.slug}`}
+                    className="block p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-center">
+                    <p className="font-semibold text-primary">{state.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Browse {state.name} golf courses</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
           // State Selection View
           <Card className="max-w-2xl mx-auto golf-card-shadow">
             <CardHeader>
@@ -360,6 +381,7 @@ const Courses = () => {
               </div>
             </CardContent>
           </Card>
+          </div>
         ) : (
           // Map View with Courses
           <div className="space-y-6">

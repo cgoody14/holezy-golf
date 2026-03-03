@@ -22,6 +22,8 @@ const BlogAdmin = lazy(() => import("./pages/BlogAdmin"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 const FAQ = lazy(() => import("./components/FAQ"));
 const Courses = lazy(() => import("./pages/Courses"));
+const StateCourses = lazy(() => import("./pages/StateCourses"));
+const CityCourses = lazy(() => import("./pages/CityCourses"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -67,6 +69,8 @@ const App = () => (
                 <Route path="/admin-setup" element={<AdminSetup />} />
                 <Route path="/faq" element={<div className="py-12 px-4"><FAQ /></div>} />
                 <Route path="/courses" element={<Courses />} />
+                <Route path="/golf-courses/:stateSlug" element={<StateCourses />} />
+                <Route path="/golf-courses/:stateSlug/:citySlug" element={<CityCourses />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
