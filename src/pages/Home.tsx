@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Calendar, Clock, Users, MapPin, Star, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Link } from 'react-router-dom';
 import SignupCounter from '@/components/SignupCounter';
 import SEOHead, { combinedHomeStructuredData } from '@/components/SEOHead';
 import StateSelectionDialog from '@/components/StateSelectionDialog';
@@ -12,6 +13,8 @@ const Home = () => {
   return (
     <div className="min-h-screen">
       <SEOHead 
+        title="Holezy Golf | Book Tee Times in Boston, NYC & Chicago"
+        description="Book premium tee times in Boston, New York City, and Chicago using AI-powered availability tracking. Secure prime weekend rounds with Holezy Golf."
         canonicalUrl="/"
         structuredData={combinedHomeStructuredData}
       />
@@ -36,6 +39,32 @@ const Home = () => {
           >
             Book My Tee Time
           </Button>
+        </div>
+      </section>
+
+      {/* What Holezy Golf Does - SEO Content */}
+      <section className="py-16 px-4">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8">
+            Your AI-Powered Golf Tee Time Concierge
+          </h2>
+          <div className="space-y-4 text-lg text-muted-foreground leading-relaxed">
+            <p>
+              Holezy Golf is an AI-powered tee time concierge service designed for weekend golfers who are tired of the frustration that comes with booking prime tee times. Whether you're trying to <strong>book golf tee times in Boston</strong>, secure a Saturday morning slot at a popular <strong>Chicago golf course</strong>, or find availability at <strong>NYC public golf</strong> courses, Holezy Golf takes the hassle out of the process entirely.
+            </p>
+            <p>
+              Our technology continuously monitors tee time availability across thousands of golf courses, identifying open slots the moment they become available. Instead of setting alarms, refreshing booking websites, or calling pro shops during business hours, you simply tell us when and where you want to play. We handle the rest — from finding availability to securing your booking and sending you a confirmation with all the details.
+            </p>
+            <p>
+              The challenge of booking golf tee times is most acute in major metropolitan areas where demand far exceeds supply. In Boston, courses like George Wright and Granite Links can fill their weekend tee sheets within minutes. In New York City, municipal courses serving over 8 million residents see extraordinary competition for peak-hour slots. And in Chicago, the compressed Midwest golf season means that every warm-weather weekend produces intense demand at forest preserve and park district courses.
+            </p>
+            <p>
+              Holezy Golf was built specifically for these high-demand markets. Our AI doesn't just check availability once — it monitors courses continuously, tracking cancellations, newly released time slots, and booking patterns to give you the best possible chance of playing when and where you want. At just $5 per player, it's a fraction of the cost of the time you'd spend trying to <strong>reserve tee times online</strong> by yourself.
+            </p>
+            <p>
+              Whether you're a casual weekend golfer, planning a group outing, or organizing a trip to one of America's great golf cities, Holezy Golf is the simplest way to get on the course. Explore our top golf destinations: <Link to="/golf-courses/massachusetts/boston" className="text-primary hover:underline font-medium">Boston golf courses</Link>, <Link to="/golf-courses/new-york/new-york-city" className="text-primary hover:underline font-medium">NYC public golf courses</Link>, and <Link to="/golf-courses/illinois/chicago" className="text-primary hover:underline font-medium">Chicago tee times</Link>.
+            </p>
+          </div>
         </div>
       </section>
 

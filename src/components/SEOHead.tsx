@@ -19,7 +19,7 @@ const SEOHead = ({
   noIndex = false,
   structuredData,
 }: SEOHeadProps) => {
-  const baseUrl = "https://holezy-golf.lovable.app";
+  const baseUrl = "https://holezygolf.com";
   const fullCanonicalUrl = canonicalUrl ? `${baseUrl}${canonicalUrl}` : undefined;
   const fullOgImage = ogImage.startsWith('http') ? ogImage : `${baseUrl}${ogImage}`;
 
@@ -62,11 +62,11 @@ export const homePageStructuredData = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   "name": "Holezy Golf",
-  "url": "https://holezy-golf.lovable.app",
+  "url": "https://holezygolf.com",
   "description": "AI-powered golf tee time concierge service that monitors 10,000+ courses and secures tee times for you.",
   "potentialAction": {
     "@type": "SearchAction",
-    "target": "https://holezy-golf.lovable.app/book?course={search_term_string}",
+    "target": "https://holezygolf.com/book?course={search_term_string}",
     "query-input": "required name=search_term_string"
   }
 };
@@ -76,15 +76,15 @@ export const organizationStructuredData = {
   "@context": "https://schema.org",
   "@type": "Organization",
   "name": "Holezy Golf",
-  "url": "https://holezy-golf.lovable.app",
-  "logo": "https://holezy-golf.lovable.app/holezy-og-image.png",
+  "url": "https://holezygolf.com",
+  "logo": "https://holezygolf.com/holezy-og-image.png",
   "sameAs": [
     "https://twitter.com/HolezyGolf"
   ],
   "contactPoint": {
     "@type": "ContactPoint",
     "contactType": "customer service",
-    "url": "https://holezy-golf.lovable.app/contact"
+    "url": "https://holezygolf.com/contact"
   }
 };
 
