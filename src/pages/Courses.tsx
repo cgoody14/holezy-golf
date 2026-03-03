@@ -154,6 +154,18 @@ const Courses = () => {
     );
   }, [searchTerm]);
 
+  const safeGeocodedCourses = useMemo(
+    () =>
+      geocodedCourses.filter(
+        (course): course is GeocodedCourse =>
+          Boolean(course) &&
+          typeof course["Facility ID"] === 'number' &&
+          Number.isFinite(course.lat) &&
+          Number.isFinite(course.lng)
+      ),
+    [geocodedCourses]
+  );
+
   // Geocode courses progressively
   const geocodeCourses = useCallback(async (coursesToGeocode: Course[], state: typeof US_STATES[0]) => {
     const cache = getGeocodeCache();
@@ -161,7 +173,11 @@ const Courses = () => {
     geocodeAbortRef.current = false;
 
     // First pass: apply cached coordinates or fallback
-    const initial: GeocodedCourse[] = coursesToGeocode.map((course, index) => {
+    const normalizedCourses = coursesToGeocode.filter(
+      (course): course is Course => Boolean(course) && typeof course["Facility ID"] === 'number'
+    );
+
+    const initial: GeocodedCourse[] = normalizedCourses.map((course, index) => {
       const cacheKey = `${course["Facility ID"]}`;
       if (cache[cacheKey]) {
         return { ...course, lat: cache[cacheKey].lat, lng: cache[cacheKey].lng };
@@ -177,7 +193,7 @@ const Courses = () => {
     setGeocodedCourses(initial);
 
     // Second pass: geocode uncached courses
-    const uncached = coursesToGeocode
+    const uncached = normalizedCourses
       .map((c, i) => ({ course: c, index: i }))
       .filter(({ course }) => !cache[`${course["Facility ID"]}`] && course["Address"]);
 
@@ -190,7 +206,9 @@ const Courses = () => {
         setGeocodeCache(cache);
         setGeocodedCourses(prev => {
           const updated = [...prev];
-          updated[index] = { ...updated[index], lat: result.lat, lng: result.lng };
+          const current = updated[index];
+          if (!current) return prev;
+          updated[index] = { ...current, lat: result.lat, lng: result.lng };
           return updated;
         });
       }
@@ -391,7 +409,7 @@ const Courses = () => {
                   <Suspense fallback={<MapLoader />}>
                     <CourseMap
                       center={[selectedState.lat, selectedState.lng]}
-                      courses={geocodedCourses}
+                      courses={safeGeocodedCourses}
                       stateCode={selectedState.code}
                       selectedCourse={selectedCourse}
                       onMarkerClick={handleMarkerClick}
@@ -418,7 +436,7 @@ const Courses = () => {
                       </div>
                     ) : (
                       <div className="divide-y">
-                        {geocodedCourses.map((course, index) => {
+                        {safeGeocodedCourses.map((course, index) => {
                           const isSelected = selectedCourse?.["Facility ID"] === course["Facility ID"];
                           return (
                             <button

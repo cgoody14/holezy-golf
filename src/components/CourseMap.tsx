@@ -56,6 +56,14 @@ const MapController = ({ selectedCourse }: { selectedCourse: GeocodedCourse | nu
 };
 
 const CourseMap = ({ center, courses, stateCode, selectedCourse, onMarkerClick }: CourseMapProps) => {
+  const validCourses = courses.filter(
+    (course): course is GeocodedCourse =>
+      Boolean(course) &&
+      typeof course["Facility ID"] === 'number' &&
+      Number.isFinite(course.lat) &&
+      Number.isFinite(course.lng)
+  );
+
   return (
     <MapContainer
       center={center}
@@ -68,7 +76,7 @@ const CourseMap = ({ center, courses, stateCode, selectedCourse, onMarkerClick }
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <MapController selectedCourse={selectedCourse} />
-      {courses.map((course, index) => {
+      {validCourses.map((course, index) => {
         const isSelected = selectedCourse?.["Facility ID"] === course["Facility ID"];
         return (
           <Marker
