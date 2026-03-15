@@ -13,8 +13,8 @@ const Home = () => {
   return (
     <div className="min-h-screen">
       <SEOHead 
-        title="Holezy Golf | Book Tee Times in Boston, NYC & Chicago"
-        description="Book premium tee times in Boston, New York City, and Chicago using AI-powered availability tracking. Secure prime weekend rounds with Holezy Golf."
+        title="Holezy Golf | Tee Time Booking Across the USA"
+        description="Stop chasing tee times. Holezy Golf monitors availability across thousands of courses nationwide and books your spot the moment it opens — for just $5 per player."
         canonicalUrl="/"
         structuredData={combinedHomeStructuredData}
       />
@@ -46,23 +46,23 @@ const Home = () => {
       <section className="py-16 px-4">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-8">
-            Your AI-Powered Golf Tee Time Concierge
+            Stop Chasing Tee Times. Start Playing Golf.
           </h2>
           <div className="space-y-4 text-lg text-muted-foreground leading-relaxed">
             <p>
-              Holezy Golf is an AI-powered tee time concierge service designed for weekend golfers who are tired of the frustration that comes with booking prime tee times. Whether you're trying to <strong>book golf tee times in Boston</strong>, secure a Saturday morning slot at a popular <strong>Chicago golf course</strong>, or find availability at <strong>NYC public golf</strong> courses, Holezy Golf takes the hassle out of the process entirely.
+              Getting a tee time at a popular course shouldn't feel like a part-time job. But for most weekend golfers, that's exactly what it's become — refreshing booking sites, setting alarms, calling pro shops, and still missing out.
             </p>
             <p>
-              Our technology continuously monitors tee time availability across thousands of golf courses, identifying open slots the moment they become available. Instead of setting alarms, refreshing booking websites, or calling pro shops during business hours, you simply tell us when and where you want to play. We handle the rest — from finding availability to securing your booking and sending you a confirmation with all the details.
+              Holezy Golf handles it for you. Tell us when and where you want to play, and we'll watch for availability, grab the slot the moment it opens, and send you a confirmation. That's it.
             </p>
             <p>
-              The challenge of booking golf tee times is most acute in major metropolitan areas where demand far exceeds supply. In Boston, courses like George Wright and Granite Links can fill their weekend tee sheets within minutes. In New York City, municipal courses serving over 8 million residents see extraordinary competition for peak-hour slots. And in Chicago, the compressed Midwest golf season means that every warm-weather weekend produces intense demand at forest preserve and park district courses.
+              We monitor <strong>thousands of golf courses across the country</strong> around the clock — catching cancellations, newly dropped slots, and last-minute openings that most golfers never even see. Whether you're trying to get on a busy municipal course in your city or planning a round at a course you've always wanted to play, we'll get you there.
             </p>
             <p>
-              Holezy Golf was built specifically for these high-demand markets. Our AI doesn't just check availability once — it monitors courses continuously, tracking cancellations, newly released time slots, and booking patterns to give you the best possible chance of playing when and where you want. At just $5 per player, it's a fraction of the cost of the time you'd spend trying to <strong>reserve tee times online</strong> by yourself.
+              At just <strong>$5 per player</strong>, it costs less than a sleeve of balls and saves you hours of frustration. Weekend tee times go fast. Let Holezy grab yours.
             </p>
             <p>
-              Whether you're a casual weekend golfer, planning a group outing, or organizing a trip to one of America's great golf cities, Holezy Golf is the simplest way to get on the course. Explore our top golf destinations: <Link to="/golf-courses/massachusetts/boston" className="text-primary hover:underline font-medium">Boston golf courses</Link>, <Link to="/golf-courses/new-york/new-york-city" className="text-primary hover:underline font-medium">NYC public golf courses</Link>, and <Link to="/golf-courses/illinois/chicago" className="text-primary hover:underline font-medium">Chicago tee times</Link>.
+              Browse courses near you: <Link to="/golf-courses/massachusetts/boston" className="text-primary hover:underline font-medium">Boston golf courses</Link>, <Link to="/golf-courses/new-york/new-york-city" className="text-primary hover:underline font-medium">NYC public golf courses</Link>, and <Link to="/golf-courses/illinois/chicago" className="text-primary hover:underline font-medium">Chicago tee times</Link>.
             </p>
           </div>
         </div>
@@ -94,7 +94,7 @@ const Home = () => {
                 </div>
                 <h3 className="text-xl font-semibold mb-3">2. Choose Your Course</h3>
                 <p className="text-muted-foreground">
-                  Select from thousands of golf courses. We'll handle the booking details.
+                  Select from thousands of golf courses across the USA. We'll handle the booking details.
                 </p>
               </CardContent>
             </Card>
@@ -229,7 +229,7 @@ const Home = () => {
                   <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-white text-sm">✓</span>
                   </div>
-                  <p className="text-lg">Confirmation email with all details</p>
+                  <p className="text-lg">Confirmation email with all the details</p>
                 </div>
               </div>
               <Button 
@@ -245,7 +245,7 @@ const Home = () => {
                 <Users className="w-16 h-16 text-primary mx-auto mb-4" />
                 <h3 className="text-2xl font-bold mb-4">Perfect for Weekend Golfers</h3>
                 <p className="text-muted-foreground text-lg">
-                  Designed for casual golfers who want stress-free tee times, whether it’s a weekend round or that trip you’ve been planning.
+                  Whether it's a quick Saturday morning round or a trip you've been planning for months, Holezy takes the stress out of getting on the course.
                 </p>
               </div>
             </div>
@@ -260,7 +260,7 @@ const Home = () => {
             Ready to Book Your Next Round?
           </h2>
           <p className="text-xl text-white/90 mb-8">
-            Join thousands of golfers who've simplified their booking experience.
+            Weekend tee times go fast. Let Holezy grab yours.
           </p>
           <Button 
             size="lg" 
