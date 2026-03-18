@@ -1,73 +1,90 @@
-# Welcome to your Lovable project
+# Holezy Golf
 
-## Project info
+Automated tee time booking — golfers submit their preferences once, Holezy books the moment the window opens.
 
-**URL**: https://lovable.dev/projects/3ab65433-0be0-4841-897e-6e2b5f137014
+## What is this?
 
-## How can I edit this code?
+Holezy monitors golf course booking windows and automatically reserves tee times the instant they become available. No more midnight alarms, no more F5 refreshing. Golfers connect their ChronoGolf (and soon GolfNow / foreUP) account, submit their preferences, and we handle the rest.
 
-There are several ways of editing your application.
+## Repo Structure
 
-**Use Lovable**
+```
+holezy-golf/
+├── src/                        # React/Vite frontend (Lovable)
+│   ├── pages/                  # Route pages
+│   ├── components/             # UI components
+│   └── integrations/supabase/  # Supabase client + types
+│
+├── booking-worker/             # Railway booking engine (Node.js)
+│   ├── src/
+│   │   ├── adapters/           # Platform adapters
+│   │   │   ├── chronogolf.ts   # 13,730 courses
+│   │   │   └── custom/         # Playwright one-off scripts
+│   │   ├── scheduler.ts        # Polls scheduled_bookings every 60s
+│   │   ├── router.ts           # Routes to correct adapter
+│   │   ├── notifications.ts    # Twilio SMS + Resend email
+│   │   └── scripts/            # One-time ingestion scripts
+│   └── Dockerfile              # Railway deployment
+│
+├── supabase/
+│   ├── functions/              # Edge functions (payments, email, etc.)
+│   └── migrations/
+│       ├── *.sql               # Site migrations (Lovable generated)
+│       └── booking-system/     # Booking engine migrations
+│           ├── 001_booking_system_schema.sql
+│           ├── 002_chronogolf_credentials.sql
+│           └── 003_courses_scheduler.sql
+│
+└── .env.example                # All required env vars documented
+```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/3ab65433-0be0-4841-897e-6e2b5f137014) and start prompting.
+## Platform Coverage
 
-Changes made via Lovable will be committed automatically to this repo.
+| Platform | Courses | Status |
+|----------|---------|--------|
+| ChronoGolf / Lightspeed | 13,730 | ✅ Active |
+| GolfNow | ~9,000 | 🔜 API approval pending |
+| foreUP | ~2,300 | 🔜 API approval pending |
+| Custom (Playwright) | Any | ✅ Add per course |
 
-**Use your preferred IDE**
+## Tech Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+**Frontend** — React, Vite, TypeScript, Tailwind, shadcn/ui, Supabase Auth
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+**Booking Worker** — Node.js, TypeScript, Supabase, deployed on Railway
 
-Follow these steps:
+**Database** — Supabase (Postgres + Realtime + Edge Functions)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+**Notifications** — Twilio (SMS) + Resend (email)
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Getting Started
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Frontend
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Booking Worker
+```bash
+cd booking-worker
+npm install
+cp ../.env.example .env.local   # fill in values
+npm run dev
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Run ChronoGolf course ingestion (~25 min, one-time)
+```bash
+cd booking-worker
+SUPABASE_URL=... SUPABASE_SERVICE_KEY=... npm run ingest:chronogolf
+```
 
-**Use GitHub Codespaces**
+### Deploy worker to Railway
+```bash
+cd booking-worker
+railway login && railway init && railway up
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Environment Variables
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/3ab65433-0be0-4841-897e-6e2b5f137014) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+See `.env.example` for all required variables. Never commit `.env`.
