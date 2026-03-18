@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables - NEVER commit
+.env
+.env.local
+.env.*.local
+*.env
+
+# Booking worker
+booking-worker/node_modules/
+booking-worker/dist/

@@ -1,0 +1,27 @@
+{
+  "name": "@holezy/booking-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Railway booking engine — polls Supabase scheduled_bookings and fires tee time reservations",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "ingest:chronogolf": "ts-node src/scripts/ingest-chronogolf-courses.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.43.0",
+    "node-fetch": "^3.3.2",
+    "p-limit": "^5.0.0",
+    "p-retry": "^6.2.0",
+    "playwright": "^1.44.0",
+    "resend": "^3.2.0",
+    "twilio": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}
