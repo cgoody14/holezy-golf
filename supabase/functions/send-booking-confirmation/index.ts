@@ -21,36 +21,26 @@ serve(async (req) => {
   }
 
   try {
-    console.log("=== BOOKING CONFIRMATION EMAIL FUNCTION START ===");
-    console.log("Environment check - RESEND_API_KEY exists:", !!Deno.env.get("RESEND_API_KEY"));
-    console.log("Available env vars:", Object.keys(Deno.env.toObject()));
-    
     const data: EmailRequest = await req.json();
-    console.log("Received booking confirmation request:", JSON.stringify(data, null, 2));
-    
+
     const email = data.to || data.email;
-    console.log("Extracted email:", email);
-    
+
     if (!email) {
-      console.error("No email provided in request");
       return new Response(JSON.stringify({ error: "Email is required" }), {
         status: 400,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
-    // Check if Resend API key is available
-    let resendApiKey = Deno.env.get("RESEND_API_KEY");
-    
-    // Fallback to hardcoded key if environment variable is not set
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) {
-      console.log("Using fallback API key");
-      resendApiKey = "re_UvtNNEAg_BRoYNCVaKNfZuKgBTdZzotuV";
+      console.error("RESEND_API_KEY environment variable is not set");
+      return new Response(JSON.stringify({ error: "Email service not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
-    
-    console.log("Resend API key found:", resendApiKey ? "YES" : "NO");
 
-    // Initialize Resend client with the API key
     const resend = new Resend(resendApiKey);
 
     let subject: string;
@@ -133,23 +123,12 @@ serve(async (req) => {
       `;
     }
 
-    console.log(`Attempting to send email to: ${email}`);
-    console.log(`Subject: ${subject}`);
-    console.log("From address: noreply@holezygolf.com");
-
-    // Determine recipients based on email type
-    const recipients = [email];
-    
-    console.log("Sending to recipients:", recipients);
-
     const emailResponse = await resend.emails.send({
       from: "Holezy Golf <noreply@holezygolf.com>",
-      to: recipients,
+      to: [email],
       subject,
       html,
     });
-
-    console.log("Email sent successfully:", JSON.stringify(emailResponse, null, 2));
 
     return new Response(JSON.stringify(emailResponse), {
       status: 200,
