@@ -7,6 +7,7 @@
 
 import fetch from 'node-fetch'
 import { createClient } from '@supabase/supabase-js'
+import type { TeeTimePreference, Course, BookingResult } from '../types'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -14,27 +15,8 @@ const supabase = createClient(
 )
 
 // ─────────────────────────────────────────────
-// TYPES
+// LOCAL TYPES
 // ─────────────────────────────────────────────
-
-interface TeeTimePreference {
-  id: string
-  golfer_id: string
-  course_id: string
-  preferred_date: string          // "2025-07-12"
-  date_flexibility_days: number
-  earliest_tee_time: string       // "07:00"
-  latest_tee_time: string         // "12:00"
-  player_count: number
-  max_price_per_player: number | null
-}
-
-interface Course {
-  id: string
-  name: string
-  chronogolf_club_id: string      // e.g. "1234" — visible in their widget embed code
-  timezone: string
-}
 
 interface GolferCredentials {
   email: string
@@ -47,14 +29,6 @@ interface TeeTimeSlot {
   green_fee: number
   available_spots: number
   rate_type: string
-}
-
-interface BookingResult {
-  success: boolean
-  noAvailability?: boolean
-  confirmationCode?: string
-  slot?: { datetime: string; course: string; fee: number }
-  error?: string
 }
 
 // ─────────────────────────────────────────────

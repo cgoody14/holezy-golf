@@ -6,14 +6,15 @@
 import { bookChronoGolfWidget } from './adapters/chronogolf'
 import { notifyGolfer } from './notifications'
 import { createClient } from '@supabase/supabase-js'
+import type { TeeTimePreference, Course, BookingAdapterFn } from './types'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
 
-export async function routeBooking(pref: any, course: any): Promise<void> {
-  const adapters: Record<string, Function> = {
+export async function routeBooking(pref: TeeTimePreference, course: Course): Promise<void> {
+  const adapters: Record<string, BookingAdapterFn> = {
     chronogolf: bookChronoGolfWidget,
     // golfnow: bookGolfNow,   ← coming once API access approved
     // foreup:  bookForeUp,    ← coming once API access approved

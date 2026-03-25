@@ -13,7 +13,11 @@ import { loadStripe, StripeCardElement } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import type { BookingData } from './BookingForm';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+if (!stripeKey) {
+  console.error('VITE_STRIPE_PUBLISHABLE_KEY is not set. The payment card field will not work.');
+}
+const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
 
 const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   const navigate = useNavigate();
@@ -142,7 +146,8 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
 
   useEffect(() => {
     createPaymentIntent();
-  }, [bookingData, toast, appliedCoupon]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingData, appliedCoupon]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -677,6 +682,20 @@ const Checkout = () => {
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <div className="text-center">
           <p className="text-lg text-muted-foreground">Loading booking details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stripeKey) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <p className="text-lg font-semibold text-destructive mb-2">Payment Unavailable</p>
+          <p className="text-muted-foreground">
+            The payment system is not configured. Please contact support at{' '}
+            <a href="mailto:support@holezygolf.com" className="underline">support@holezygolf.com</a>.
+          </p>
         </div>
       </div>
     );

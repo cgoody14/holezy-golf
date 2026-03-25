@@ -4,6 +4,7 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
+import type { TeeTimePreference, BookingSlot, GolferProfile } from './types'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -11,15 +12,15 @@ const supabase = createClient(
 )
 
 export async function notifyGolfer(
-  pref: any,
-  slot: any,
+  pref: TeeTimePreference,
+  slot: BookingSlot | null,
   type: 'booked' | 'failed'
 ): Promise<void> {
   const { data: golfer } = await supabase
     .from('golfer_profiles')
     .select('full_name, email, phone')
     .eq('id', pref.golfer_id)
-    .single()
+    .single<GolferProfile>()
 
   if (!golfer) return
 

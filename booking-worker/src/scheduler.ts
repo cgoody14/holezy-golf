@@ -6,8 +6,9 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
-import { bookChronoGolfWidget } from './adapters/chronogolf-widget'
+import { bookChronoGolfWidget } from './adapters/chronogolf'
 import { notifyGolfer } from './notifications'
+import type { TeeTimePreference, Course } from './types'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -71,7 +72,14 @@ async function checkAndFireDue() {
 // then attempt the booking
 // ─────────────────────────────────────────────
 
-async function fireBooking(scheduled: any) {
+interface ScheduledBooking {
+  id: string
+  preference_id: string
+  courses: Course
+  tee_time_preferences: TeeTimePreference
+}
+
+async function fireBooking(scheduled: ScheduledBooking) {
   const { id, preference_id, courses: course, tee_time_preferences: pref } = scheduled
 
   if (!pref || pref.status === 'booked' || pref.status === 'cancelled') {
