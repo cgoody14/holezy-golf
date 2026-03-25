@@ -1,4 +1,6 @@
 import React, { Suspense, lazy } from 'react';
+// Eagerly initialize Stripe so it starts loading before the user hits /checkout
+import '@/lib/stripe';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";

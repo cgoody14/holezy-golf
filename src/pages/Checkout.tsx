@@ -9,15 +9,10 @@ import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, Users, MapPin, Tag, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { loadStripe, StripeCardElement } from '@stripe/stripe-js';
+import type { StripeCardElement } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import type { BookingData } from './BookingForm';
-
-const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-if (!stripeKey) {
-  console.error('VITE_STRIPE_PUBLISHABLE_KEY is not set. The payment card field will not work.');
-}
-const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
+import { stripePromise } from '@/lib/stripe';
 
 const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   const navigate = useNavigate();

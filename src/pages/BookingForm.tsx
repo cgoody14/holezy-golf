@@ -35,6 +35,11 @@ interface StoredBookingDetails {
 const BookingForm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Prefetch the Checkout chunk and Stripe so they're ready when the user submits
+  useEffect(() => {
+    import('./Checkout');
+  }, []);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [user, setUser] = useState(null);
