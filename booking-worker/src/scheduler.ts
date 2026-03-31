@@ -1,8 +1,7 @@
 // ============================================================
 // src/scheduler.ts  — Railway worker polling loop
 // Polls scheduled_bookings every 60s, fires bookings at exact fire_at
-// This replaces blind 30-min polling with precision scheduling
-// Lines: 120
+// On no_availability: retries at 7am EST daily until booked
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
@@ -126,8 +125,9 @@ async function fireBooking(scheduled: ScheduledBooking) {
     console.log(`✅ Booked! Confirmation: ${result.confirmationCode}`)
 
   } else if (result.noAvailability) {
-    // No slots yet — re-schedule a retry in 30 minutes
-    const retryAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+    // No slots yet — retry at next 7am EST
+    const retryAt = getNext7amEST().toISOString()
+
     await supabase.from('scheduled_bookings').insert({
       preference_id,
       course_id: course.id,
@@ -141,7 +141,7 @@ async function fireBooking(scheduled: ScheduledBooking) {
       result: 'no_availability',
     })
 
-    console.log(`📭 No availability — retry scheduled for ${retryAt}`)
+    console.log(`📭 No availability — retry at 7am EST: ${retryAt}`)
 
   } else {
     // Hard error — notify golfer, mark failed
@@ -158,6 +158,36 @@ async function fireBooking(scheduled: ScheduledBooking) {
     await notifyGolfer(pref, null, 'failed')
     console.error(`❌ Booking error: ${result.error}`)
   }
+}
+
+// ─────────────────────────────────────────────
+// Returns the next 7:00 AM America/New_York as a UTC Date.
+// If it is currently before 7am EST today, returns today at 7am EST.
+// If it is 7am or later, returns tomorrow at 7am EST.
+// ─────────────────────────────────────────────
+function getNext7amEST(): Date {
+  const now = new Date()
+
+  // Build a Date whose .getHours() / .getDate() reflect EST/EDT values.
+  // On a UTC server (Railway), toLocaleString returns EST wall-clock values
+  // which new Date() then parses back as UTC — giving us the right numeric fields.
+  const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+
+  // offsetMs: difference between real UTC and the "EST-as-UTC" Date above.
+  // Adding this back converts an EST wall-clock Date to real UTC.
+  const offsetMs = now.getTime() - estNow.getTime()
+
+  // Set target to 7am on the current EST date
+  const target = new Date(estNow)
+  target.setHours(7, 0, 0, 0)
+
+  // If we are already at or past 7am EST, roll to tomorrow
+  if (estNow >= target) {
+    target.setDate(target.getDate() + 1)
+  }
+
+  // Convert EST wall-clock back to real UTC
+  return new Date(target.getTime() + offsetMs)
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
