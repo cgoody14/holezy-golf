@@ -1,0 +1,210 @@
+name: GolfNow Course Scraper
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 1 * *"
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        state: [al, ak, az, ar, ca, co, ct, de, fl, ga, hi, id, il, in, ia, ks, ky, la, me, md, ma, mi, mn, ms, mo, mt, ne, nv, nh, nj, nm, ny, nc, nd, oh, ok, or, pa, ri, sc, sd, tn, tx, ut, vt, va, wa, wv, wi, wy]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install dependencies
+        run: pip install selenium webdriver-manager pandas
+
+      - name: Run scraper for ${{ matrix.state }}
+        run: |
+          mkdir -p output
+          python scraper/GolfNow_scraper.py ${{ matrix.state }}
+
+      - name: Upload CSV for ${{ matrix.state }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: GolfNow_${{ matrix.state }}
+          path: output/Golf_Now_Courses.csv
+          retention-days: 7
+
+  merge_and_upload:
+    runs-on: ubuntu-latest
+    needs: scrape
+    if: always()
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pandas requests
+
+      - name: Download all GolfNow state artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts
+          pattern: GolfNow_*
+
+      - name: Download Chronogolf artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chronogolf_courses
+          path: chronogolf_artifact
+        continue-on-error: true
+
+      - name: Merge and combine all CSVs
+        run: |
+          python - <<'EOF'
+          import pandas as pd
+          import os
+          import glob
+          import hashlib
+
+          # ---- Merge GolfNow state CSVs ----
+          golfnow_files = glob.glob("downloaded_artifacts/**/Golf_Now_Courses.csv", recursive=True)
+          print(f"Found {len(golfnow_files)} GolfNow state files")
+
+          gn_dfs = []
+          for f in golfnow_files:
+              try:
+                  gn_dfs.append(pd.read_csv(f))
+              except Exception as e:
+                  print(f"Skipping {f}: {e}")
+
+          if gn_dfs:
+              gn = pd.concat(gn_dfs, ignore_index=True)
+              gn.drop_duplicates(subset=["facility_id"], inplace=True)
+          else:
+              gn = pd.DataFrame(columns=["facility_id","course_name","address","tee_times_url","tee_time_booking"])
+
+          print(f"GolfNow total: {len(gn)}")
+
+          # ---- Load Chronogolf ----
+          cg_path = "chronogolf_artifact/chronogolf_courses.csv"
+          if os.path.exists(cg_path):
+              cg = pd.read_csv(cg_path)
+              print(f"Chronogolf total: {len(cg)}")
+          else:
+              print("No Chronogolf artifact found, skipping")
+              cg = pd.DataFrame(columns=["Course Name","Booking URL","Address","Address Link","Course Website","Phone","Booking Window"])
+
+          # ---- Normalize GolfNow ----
+          gn_norm = pd.DataFrame({
+              "Facility ID": pd.to_numeric(gn["facility_id"], errors="coerce"),
+              "Course Name": gn["course_name"],
+              "Address": gn["address"],
+              "Tee Times URL": gn["tee_times_url"],
+              "Tee Time Booking": gn["tee_time_booking"],
+              "Booking URL": None, "Address Link": None,
+              "Course Website": None, "Phone": None,
+              "Booking Window": None, "Source": "GolfNow"
+          })
+
+          # ---- Normalize Chronogolf with stable hash-based ID ----
+          if len(cg) > 0:
+              def stable_id(name, address):
+                  key = f"{str(name).strip().lower()}|{str(address).strip().lower()}"
+                  return 2000000 + (int(hashlib.md5(key.encode()).hexdigest(), 16) % 900000)
+
+              cg_norm = pd.DataFrame({
+                  "Facility ID": [stable_id(r["Course Name"], r["Address"]) for _, r in cg.iterrows()],
+                  "Course Name": cg["Course Name"],
+                  "Address": cg["Address"],
+                  "Tee Times URL": None,
+                  "Tee Time Booking": "Online Tee Time Booking Available",
+                  "Booking URL": cg["Booking URL"],
+                  "Address Link": cg["Address Link"],
+                  "Course Website": cg["Course Website"],
+                  "Phone": cg["Phone"].astype(str),
+                  "Booking Window": cg["Booking Window"],
+                  "Source": "Chronogolf"
+              })
+              cg_norm.drop_duplicates(subset=["Facility ID"], inplace=True)
+              combined = pd.concat([gn_norm, cg_norm], ignore_index=True)
+          else:
+              combined = gn_norm
+
+          combined["Facility ID"] = combined["Facility ID"].astype("Int64")
+          combined = combined.where(pd.notnull(combined), None)
+
+          os.makedirs("output", exist_ok=True)
+          combined.to_csv("output/Course_Database_Combined.csv", index=False, encoding="utf-8-sig")
+          print(f"✅ Combined total: {len(combined)} courses")
+          EOF
+
+      - name: Upload combined CSV to Supabase
+        env:
+          SUPABASE_URL: https://azgnzhtqoyqlixfhlkyz.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python - <<'EOF'
+          import pandas as pd
+          import requests
+          import json
+          import os
+
+          url = os.environ["SUPABASE_URL"]
+          key = os.environ["SUPABASE_SERVICE_KEY"]
+
+          headers = {
+              "apikey": key,
+              "Authorization": f"Bearer {key}",
+              "Content-Type": "application/json",
+              "Prefer": "resolution=merge-duplicates"
+          }
+
+          df = pd.read_csv("output/Course_Database_Combined.csv")
+          df["Facility ID"] = pd.to_numeric(df["Facility ID"], errors="coerce")
+          df = df.dropna(subset=["Facility ID"])
+          df["Facility ID"] = df["Facility ID"].astype(int)
+          df = df.where(pd.notnull(df), None)
+
+          BATCH_SIZE = 500
+          total = len(df)
+          uploaded = 0
+          errors = 0
+
+          for i in range(0, total, BATCH_SIZE):
+              batch = df.iloc[i:i+BATCH_SIZE].to_dict(orient="records")
+              response = requests.post(
+                  f"{url}/rest/v1/Course_Database",
+                  headers=headers,
+                  data=json.dumps(batch)
+              )
+              if response.status_code in (200, 201):
+                  uploaded += len(batch)
+                  print(f"✅ Uploaded rows {i+1}–{min(i+BATCH_SIZE, total)} of {total}")
+              else:
+                  errors += 1
+                  print(f"❌ Error on batch {i}: {response.status_code} - {response.text[:200]}")
+
+          print(f"\n🏌️ Done! {uploaded}/{total} rows uploaded to Supabase. Errors: {errors}")
+          EOF
+
+      - name: Upload combined CSV as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Course_Database_Combined
+          path: output/Course_Database_Combined.csv
+          retention-days: 90
