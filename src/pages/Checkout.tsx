@@ -309,21 +309,40 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         return `${hours.padStart(2, '0')}:${minutes}:00`;
       };
 
-      // Fetch course details
-      let facilityId = null;
+      // Fetch course details — prefer sessionStorage (has platform info) then DB fallback
+      let facilityId: number | null = null;
       let hasOnlineBooking = null;
-      
-      if (bookingData.preferredCourse) {
+      let bookingPlatform = 'chronogolf';
+      let platformCourseId = '';
+      let platformBookingUrl = '';
+
+      const storedCourse = sessionStorage.getItem('selectedCourse');
+      if (storedCourse) {
+        try {
+          const sc = JSON.parse(storedCourse);
+          if (sc.name === bookingData.preferredCourse) {
+            facilityId        = sc.facilityId        ?? null;
+            bookingPlatform   = sc.bookingPlatform   || 'chronogolf';
+            platformCourseId  = sc.platformCourseId  || '';
+            platformBookingUrl = sc.platformBookingUrl || '';
+          }
+        } catch (_) { /* ignore parse errors */ }
+      }
+
+      if (!facilityId && bookingData.preferredCourse) {
         try {
           const { data: courseData } = await (supabase as any)
             .from('Course_Database')
-            .select('"Facility ID", "Tee Time Booking"')
+            .select('"Facility ID", "Tee Time Booking", booking_platform, platform_course_id, platform_booking_url')
             .eq('"Course Name"', bookingData.preferredCourse)
             .maybeSingle();
-        
+
           if (courseData) {
-            facilityId = courseData["Facility ID"];
-            hasOnlineBooking = courseData["Tee Time Booking"];
+            facilityId         = courseData["Facility ID"];
+            hasOnlineBooking   = courseData["Tee Time Booking"];
+            bookingPlatform    = courseData.booking_platform    || 'chronogolf';
+            platformCourseId   = courseData.platform_course_id  || '';
+            platformBookingUrl = courseData.platform_booking_url || '';
           }
         } catch (error) {
           console.log('Error fetching course data:', error);
@@ -368,15 +387,19 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
       try {
         await supabase.functions.invoke('create-scheduled-job', {
           body: {
-            golfer_email:         bookingData.email,
-            golfer_name:          `${bookingData.firstName} ${bookingData.lastName}`,
-            facility_id:          facilityId,
-            course_name:          bookingData.preferredCourse,
-            booking_date:         bookingData.date,
-            earliest_time:        convertTo24Hour(bookingData.earliestTime).slice(0, 5),
-            latest_time:          convertTo24Hour(bookingData.latestTime).slice(0, 5),
-            player_count:         bookingData.numberOfPlayers,
-            fire_at:              new Date().toISOString(),
+            golfer_email:          bookingData.email,
+            golfer_name:           `${bookingData.firstName} ${bookingData.lastName}`,
+            facility_id:           facilityId,
+            course_name:           bookingData.preferredCourse,
+            booking_date:          bookingData.date,
+            earliest_time:         convertTo24Hour(bookingData.earliestTime).slice(0, 5),
+            latest_time:           convertTo24Hour(bookingData.latestTime).slice(0, 5),
+            player_count:          bookingData.numberOfPlayers,
+            fire_at:               new Date().toISOString(),
+            // Platform info from course selection (avoids second DB lookup in Edge Function)
+            booking_platform:      bookingPlatform,
+            platform_course_id:    platformCourseId,
+            platform_booking_url:  platformBookingUrl,
           }
         });
       } catch (scheduleError) {

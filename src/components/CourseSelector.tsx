@@ -11,6 +11,9 @@ interface Course {
   "Course Name": string;
   "Address"?: string;
   "Facility ID"?: number;
+  booking_platform?: string;
+  platform_course_id?: string;
+  platform_booking_url?: string;
 }
 
 interface CustomCourse {
@@ -91,7 +94,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
       
       let query = supabase
         .from('Course_Database')
-        .select('"Course Name", "Address", "Facility ID"')
+        .select('"Course Name", "Address", "Facility ID", booking_platform, platform_course_id, platform_booking_url')
         .not('"Course Name"', 'is', null);
       
       // Filter by state if provided
@@ -140,7 +143,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
     loadCourses(0, true);
   }, [stateFilter]);
 
-  const handleCourseSelect = (courseName: string) => {
+  const handleCourseSelect = (courseName: string, course?: Course) => {
     if (courseName === 'Other') {
       setShowCustomInput(true);
       setSearchTerm('');
@@ -148,7 +151,18 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
       onCourseSelect(courseName);
       setSearchTerm(courseName);
       setShowCustomInput(false);
-      
+
+      // Persist platform info so Checkout can create the right scheduled job
+      if (course) {
+        sessionStorage.setItem('selectedCourse', JSON.stringify({
+          name:                 course["Course Name"],
+          facilityId:           course["Facility ID"],
+          bookingPlatform:      course.booking_platform || 'chronogolf',
+          platformCourseId:     course.platform_course_id || String(course["Facility ID"] || ''),
+          platformBookingUrl:   course.platform_booking_url || '',
+        }));
+      }
+
       // Save to recent searches
       const updated = [courseName, ...recentSearches.filter(s => s !== courseName)].slice(0, 5);
       setRecentSearches(updated);
@@ -441,7 +455,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                       className={`w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none ${
                         course["Course Name"] === 'Other' ? 'bg-primary/5 border-t-2 border-primary/20' : ''
                       }`}
-                      onClick={() => handleCourseSelect(course["Course Name"])}
+                      onClick={() => handleCourseSelect(course["Course Name"], course)}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">

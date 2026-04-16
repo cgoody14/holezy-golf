@@ -15,19 +15,23 @@ serve(async (req) => {
     const {
       golfer_email,
       golfer_name,
-      facility_id,       // Course_Database "Facility ID"
+      facility_id,
       course_name,
-      booking_date,      // "YYYY-MM-DD"
-      earliest_time,     // "HH:MM"
-      latest_time,       // "HH:MM"
+      booking_date,
+      earliest_time,
+      latest_time,
       player_count,
       max_price_per_player,
-      fire_at,           // ISO timestamp — when to trigger the booking attempt
+      fire_at,
+      // Platform info passed directly from frontend (avoids extra DB lookup)
+      booking_platform:     platform_from_frontend,
+      platform_course_id:   course_id_from_frontend,
+      platform_booking_url: booking_url_from_frontend,
     } = await req.json();
 
-    if (!golfer_email || !facility_id || !course_name || !booking_date) {
+    if (!golfer_email || !course_name || !booking_date) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: golfer_email, facility_id, course_name, booking_date" }),
+        JSON.stringify({ error: "Missing required fields: golfer_email, course_name, booking_date" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
@@ -37,34 +41,28 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // ── Look up the course to get booking_platform and platform_course_id ──
-    const { data: courses, error: courseError } = await supabase
-      .from("Course_Database")
-      .select('"Facility ID", "Course Name", booking_platform, platform_course_id, platform_booking_url')
-      .eq('"Facility ID"', facility_id)
-      .limit(1);
+    // ── Resolve platform — use frontend-provided values if present,
+    //    otherwise look up from Course_Database ──────────────────────────────
+    let platform     = platform_from_frontend  || "chronogolf";
+    let platform_id  = course_id_from_frontend || String(facility_id ?? "");
+    let course_url   = booking_url_from_frontend || platform_id;
 
-    if (courseError) {
-      console.error("Course lookup error:", courseError);
-      return new Response(
-        JSON.stringify({ error: "Failed to look up course" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-      );
+    if ((!platform_from_frontend || !course_id_from_frontend) && facility_id) {
+      const { data: courses } = await supabase
+        .from("Course_Database")
+        .select('"Facility ID", booking_platform, platform_course_id, platform_booking_url')
+        .eq('"Facility ID"', facility_id)
+        .limit(1);
+
+      const course = courses?.[0];
+      if (course) {
+        platform    = course.booking_platform    || platform;
+        platform_id = course.platform_course_id  || platform_id;
+        course_url  = course.platform_booking_url || course_url;
+      }
     }
 
-    const course = courses?.[0];
-    if (!course) {
-      return new Response(
-        JSON.stringify({ error: `No course found with Facility ID ${facility_id}` }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 404 }
-      );
-    }
-
-    const platform      = course.booking_platform    ?? "chronogolf";
-    const platform_id   = course.platform_course_id  ?? String(facility_id);
-    const course_url    = course.platform_booking_url ?? platform_id;
-
-    // ── Resolve platform credentials from env vars ──────────────────────
+    // ── Resolve platform credentials from Edge Function secrets ────────────
     const PLATFORM_CREDS: Record<string, [string, string]> = {
       chronogolf: ["CHRONOGOLF_EMAIL", "CHRONOGOLF_PASSWORD"],
       golfnow:    ["GOLFNOW_EMAIL",    "GOLFNOW_PASSWORD"],
@@ -85,7 +83,7 @@ serve(async (req) => {
       );
     }
 
-    // ── Insert into scheduled_jobs ──────────────────────────────────────
+    // ── Insert into scheduled_jobs ─────────────────────────────────────────
     const { data: job, error: insertError } = await supabase
       .from("scheduled_jobs")
       .insert({
@@ -115,7 +113,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Scheduled job created: ${job.id} for ${golfer_email} @ ${course_name} on ${booking_date}`);
+    console.log(`Scheduled job created: ${job.id} for ${golfer_email} @ ${course_name} on ${booking_date} via ${platform}`);
 
     return new Response(
       JSON.stringify({ success: true, job_id: job.id, platform }),
