@@ -10,8 +10,9 @@
 #       Delegates immediately to scrape_until_found().
 #
 #   scrape_until_found(booking_id: str) → None
-#       Fetches fresh job data from Supabase, then drives up to MAX_ATTEMPTS
-#       booking attempts. On each attempt:
+#       Fetches fresh job data from Supabase, resolves the correct booking
+#       engine for the job's platform, then drives up to MAX_ATTEMPTS attempts.
+#       On each attempt:
 #           1. Launch Playwright Chromium (headless=True, always)
 #           2. Login → search_slots → if found: book_slot → update DB + notify
 #           3. If no slots: sleep RETRY_SHORT_SECS (attempts 1-5) or
@@ -20,14 +21,18 @@
 #       On exhausted attempts: status = 'failed', failure email sent
 #       Browser is always closed in a finally block.
 #
+# Supported platforms (booking_platform column in scheduled_jobs):
+#   chronogolf, golfnow, teeoff, fore, supreme
+#
 # Supabase table expected: scheduled_jobs
-#   Columns read:  id, status, golfer_email, golfer_name, chronogolf_email,
-#                  chronogolf_password, course_name, course_url, booking_date,
-#                  earliest_time, latest_time, player_count, max_price_per_player
+#   Columns read:  id, status, booking_platform, golfer_email, golfer_name,
+#                  course_name, course_url, booking_date, earliest_time,
+#                  latest_time, player_count, max_price_per_player
 #   Columns written: status, attempts, confirmation_code, last_error, updated_at
 # =============================================================================
 
 import asyncio
+import importlib
 import os
 import traceback
 from datetime import datetime, timezone
@@ -35,7 +40,6 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv, find_dotenv
 from supabase import create_client
 
-import booking
 import notifications
 
 load_dotenv(find_dotenv())
@@ -48,6 +52,24 @@ load_dotenv(find_dotenv())
 MAX_ATTEMPTS      = 20
 RETRY_SHORT_SECS  = 30   # between attempts 1–5
 RETRY_LONG_SECS   = 60   # between attempts 6–MAX_ATTEMPTS
+
+# Maps booking_platform value → booking module name
+BOOKING_ENGINES = {
+    "chronogolf": "booking_chronogolf",
+    "golfnow":    "booking_golfnow",
+    "teeoff":     "booking_teeoff",
+    "fore":       "booking_fore",
+    "supreme":    "booking_supreme",
+}
+
+# Maps platform → (email_env_var, password_env_var)
+PLATFORM_CREDS = {
+    "chronogolf": ("CHRONOGOLF_EMAIL", "CHRONOGOLF_PASSWORD"),
+    "golfnow":    ("GOLFNOW_EMAIL",    "GOLFNOW_PASSWORD"),
+    "teeoff":     ("TEEOFF_EMAIL",     "TEEOFF_PASSWORD"),
+    "fore":       ("FORE_EMAIL",       "FORE_PASSWORD"),
+    "supreme":    ("SUPREME_EMAIL",    "SUPREME_PASSWORD"),
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -96,12 +118,12 @@ async def run_job(job: dict) -> None:
     job_id = job["id"]
     print(
         f"[scheduler] run_job {job_id} — "
-        f"{job.get('course_name')} on {job.get('booking_date')}"
+        f"{job.get('course_name')} on {job.get('booking_date')} "
+        f"via {job.get('booking_platform', 'chronogolf')}"
     )
     try:
         await scrape_until_found(job_id)
     except Exception:
-        # Guard against unexpected crashes outside the main retry loop.
         traceback.print_exc()
         try:
             _update_job(job_id, {
@@ -120,9 +142,10 @@ async def scrape_until_found(booking_id: str) -> None:
     """
     Core booking retry engine.
 
-    Fetches the full job record from Supabase, then loops up to MAX_ATTEMPTS
-    times. A single Playwright browser is launched once per job and a fresh
-    page is created for each attempt — this isolates state between retries
+    Fetches the full job record from Supabase, resolves the correct booking
+    engine for the job's platform, then loops up to MAX_ATTEMPTS times.
+    A single Playwright browser is launched once per job and a fresh page
+    is created for each attempt — this isolates state between retries
     without the overhead of restarting the browser.
 
     The browser is guaranteed to be closed in the outermost finally block.
@@ -138,6 +161,31 @@ async def scrape_until_found(booking_id: str) -> None:
 
     job = rows[0]
 
+    # ── Resolve booking engine ────────────────────────────────────────────
+    platform    = job.get("booking_platform", "chronogolf")
+    module_name = BOOKING_ENGINES.get(platform)
+    if not module_name:
+        _update_job(job["id"], {
+            "status":     "failed",
+            "last_error": f"Unknown booking_platform '{platform}'",
+        })
+        return
+
+    booking = importlib.import_module(module_name)
+    print(f"[scheduler] Using engine: {module_name}")
+
+    # ── Resolve platform credentials from env vars ────────────────────────
+    email_var, pw_var = PLATFORM_CREDS[platform]
+    cg_email    = os.environ.get(email_var, "")
+    cg_password = os.environ.get(pw_var, "")
+
+    if not cg_email or not cg_password:
+        _update_job(job["id"], {
+            "status":     "failed",
+            "last_error": f"Missing credentials: {email_var} / {pw_var} not set in env",
+        })
+        return
+
     # ── Extract booking parameters ────────────────────────────────────────
     job_id       = job["id"]
     course_url   = job["course_url"]
@@ -148,9 +196,7 @@ async def scrape_until_found(booking_id: str) -> None:
         "earliest": str(job.get("earliest_time", "06:00"))[:5],   # "HH:MM"
         "latest":   str(job.get("latest_time",   "18:00"))[:5],
     }
-    max_price    = job.get("max_price_per_player")   # float or None
-    cg_email     = job["chronogolf_email"]
-    cg_password  = job["chronogolf_password"]
+    max_price    = job.get("max_price_per_player")
 
     print(
         f"[scheduler] scrape_until_found job={job_id} "
@@ -176,7 +222,6 @@ async def scrape_until_found(booking_id: str) -> None:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             print(f"[scheduler] Attempt {attempt}/{MAX_ATTEMPTS}")
 
-            # Stamp attempt count immediately so the DB always reflects progress
             _update_job(job_id, {"attempts": attempt})
 
             page = await browser.new_page()
@@ -215,32 +260,25 @@ async def scrape_until_found(booking_id: str) -> None:
                 }
                 await notifications.send_success(enriched)
 
-                print(
-                    f"[scheduler] SUCCESS job={job_id} "
-                    f"confirmation={confirm_code}"
-                )
-                return   # done — exit retry loop and finally will close browser
+                print(f"[scheduler] SUCCESS job={job_id} confirmation={confirm_code}")
+                return
 
             except _NoAvailability as e:
-                # Not an error — tee times just aren't open yet
                 print(f"[scheduler] No availability on attempt {attempt}: {e}")
                 _update_job(job_id, {"last_error": f"No slots (attempt {attempt})"})
 
             except Exception as exc:
-                # Real error — log, store, keep retrying
                 err_msg = f"Attempt {attempt} error: {exc!s}"[:500]
                 print(f"[scheduler] {err_msg}")
                 traceback.print_exc()
                 _update_job(job_id, {"last_error": err_msg})
 
             finally:
-                # Always close the page; browser stays open for next attempt
                 try:
                     await page.close()
                 except Exception:
                     pass
 
-            # ── Decide how long to wait before next attempt ───────────────
             if attempt >= MAX_ATTEMPTS:
                 break
 
@@ -254,7 +292,6 @@ async def scrape_until_found(booking_id: str) -> None:
         await notifications.send_failure(job)
 
     except Exception:
-        # Catch anything that escaped the attempt loop (e.g. browser launch fail)
         traceback.print_exc()
         try:
             _update_job(job_id, {
@@ -266,7 +303,6 @@ async def scrape_until_found(booking_id: str) -> None:
             traceback.print_exc()
 
     finally:
-        # ── Guaranteed browser teardown ───────────────────────────────────
         if browser:
             try:
                 await browser.close()

@@ -364,6 +364,25 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         throw new Error('Failed to save booking');
       }
 
+      // Dispatch automated booking job to Python worker
+      try {
+        await supabase.functions.invoke('create-scheduled-job', {
+          body: {
+            golfer_email:         bookingData.email,
+            golfer_name:          `${bookingData.firstName} ${bookingData.lastName}`,
+            facility_id:          facilityId,
+            course_name:          bookingData.preferredCourse,
+            booking_date:         bookingData.date,
+            earliest_time:        convertTo24Hour(bookingData.earliestTime).slice(0, 5),
+            latest_time:          convertTo24Hour(bookingData.latestTime).slice(0, 5),
+            player_count:         bookingData.numberOfPlayers,
+            fire_at:              new Date().toISOString(),
+          }
+        });
+      } catch (scheduleError) {
+        console.error('Failed to create scheduled job (non-fatal):', scheduleError);
+      }
+
       // Store confirmation data
       const confirmationData = {
         ...bookingData,

@@ -48,7 +48,24 @@ In Railway → your service → **Variables**, add:
 | `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
 | `SUPABASE_SERVICE_KEY` | service-role key from Supabase → Settings → API |
 | `RESEND_API_KEY` | from Resend dashboard |
+| `CHRONOGOLF_EMAIL` | Holezy company ChronoGolf login |
+| `CHRONOGOLF_PASSWORD` | Holezy company ChronoGolf password |
+| `GOLFNOW_EMAIL` | Holezy company GolfNow login |
+| `GOLFNOW_PASSWORD` | Holezy company GolfNow password |
+| `TEEOFF_EMAIL` | Holezy company TeeOff login |
+| `TEEOFF_PASSWORD` | Holezy company TeeOff password |
+| `FORE_EMAIL` | Holezy company Fore! Reservations login |
+| `FORE_PASSWORD` | Holezy company Fore! Reservations password |
+| `SUPREME_EMAIL` | Holezy company Supreme Golf login |
+| `SUPREME_PASSWORD` | Holezy company Supreme Golf password |
 | `SENTRY_DSN` | *(optional)* from Sentry project settings |
+
+Also add the same platform credential vars to your **Supabase Edge Function secrets**
+(Supabase → Edge Functions → Secrets), so the `create-scheduled-job` function can
+read them when inserting jobs:
+`CHRONOGOLF_EMAIL`, `CHRONOGOLF_PASSWORD`, `GOLFNOW_EMAIL`, `GOLFNOW_PASSWORD`,
+`TEEOFF_EMAIL`, `TEEOFF_PASSWORD`, `FORE_EMAIL`, `FORE_PASSWORD`,
+`SUPREME_EMAIL`, `SUPREME_PASSWORD`
 
 ### 5. Deploy
 
