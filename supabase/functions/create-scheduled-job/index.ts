@@ -62,6 +62,24 @@ serve(async (req) => {
       }
     }
 
+    // ── Duplicate guard — prevent double-booking on page refresh/double-click
+    const { data: existing } = await supabase
+      .from("scheduled_jobs")
+      .select("id, status")
+      .eq("golfer_email", golfer_email)
+      .eq("course_name",  course_name)
+      .eq("booking_date", booking_date)
+      .in("status", ["pending", "booked"])
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log(`Duplicate job skipped for ${golfer_email} @ ${course_name} on ${booking_date} — existing job ${existing[0].id}`);
+      return new Response(
+        JSON.stringify({ success: true, job_id: existing[0].id, platform, duplicate: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
     // ── Resolve platform credentials from Edge Function secrets ────────────
     const PLATFORM_CREDS: Record<string, [string, string]> = {
       chronogolf: ["CHRONOGOLF_EMAIL", "CHRONOGOLF_PASSWORD"],
@@ -99,6 +117,7 @@ serve(async (req) => {
         player_count:         player_count  ?? 2,
         max_price_per_player: max_price_per_player ?? null,
         booking_platform:     platform,
+        platform_course_id:   platform_id || null,
         fire_at:              fire_at ?? new Date().toISOString(),
         status:               "pending",
       })

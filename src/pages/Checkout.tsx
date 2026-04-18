@@ -384,8 +384,9 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
       }
 
       // Dispatch automated booking job to Python worker
+      let scheduledJobId: string | null = null;
       try {
-        await supabase.functions.invoke('create-scheduled-job', {
+        const { data: jobData } = await supabase.functions.invoke('create-scheduled-job', {
           body: {
             golfer_email:          bookingData.email,
             golfer_name:           `${bookingData.firstName} ${bookingData.lastName}`,
@@ -396,12 +397,12 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
             latest_time:           convertTo24Hour(bookingData.latestTime).slice(0, 5),
             player_count:          bookingData.numberOfPlayers,
             fire_at:               new Date().toISOString(),
-            // Platform info from course selection (avoids second DB lookup in Edge Function)
             booking_platform:      bookingPlatform,
             platform_course_id:    platformCourseId,
             platform_booking_url:  platformBookingUrl,
           }
         });
+        scheduledJobId = jobData?.job_id ?? null;
       } catch (scheduleError) {
         console.error('Failed to create scheduled job (non-fatal):', scheduleError);
       }
@@ -411,6 +412,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         ...bookingData,
         totalPrice: calculateTotal(),
         promoCode,
+        scheduledJobId,
         paymentMethod: {
           last4: cardLast4,
           cardType: `${cardBrand.charAt(0).toUpperCase() + cardBrand.slice(1)} Card`

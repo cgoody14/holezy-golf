@@ -467,8 +467,13 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                               </>
                             ) : (
                               <>
-                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
                                 <span className="truncate">{course["Course Name"]}</span>
+                                {course.booking_platform && course.booking_platform !== 'chronogolf' && (
+                                  <span className="ml-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                                    {course.booking_platform}
+                                  </span>
+                                )}
                               </>
                             )}
                           </div>
