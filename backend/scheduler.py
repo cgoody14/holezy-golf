@@ -41,6 +41,7 @@ from dotenv import load_dotenv, find_dotenv
 from supabase import create_client
 
 import notifications
+from courses.registry import get_adapter
 
 load_dotenv(find_dotenv())
 
@@ -161,18 +162,27 @@ async def scrape_until_found(booking_id: str) -> None:
 
     job = rows[0]
 
-    # ── Resolve booking engine ────────────────────────────────────────────
-    platform    = job.get("booking_platform", "chronogolf")
-    module_name = BOOKING_ENGINES.get(platform)
-    if not module_name:
-        _update_job(job["id"], {
-            "status":     "failed",
-            "last_error": f"Unknown booking_platform '{platform}'",
-        })
-        return
+    # ── Check for one-off course adapter (highest priority) ──────────────
+    platform_course_id = job.get("platform_course_id", "")
+    adapter_cls        = get_adapter(platform_course_id) if platform_course_id else None
+    adapter            = adapter_cls() if adapter_cls else None
 
-    booking = importlib.import_module(module_name)
-    print(f"[scheduler] Using engine: {module_name}")
+    if adapter:
+        print(f"[scheduler] Using custom adapter: {adapter_cls.__name__}")
+
+    # ── Resolve booking engine (fallback when no custom adapter) ─────────
+    platform    = job.get("booking_platform", "chronogolf")
+    booking     = None
+    if not adapter:
+        module_name = BOOKING_ENGINES.get(platform)
+        if not module_name:
+            _update_job(job["id"], {
+                "status":     "failed",
+                "last_error": f"Unknown booking_platform '{platform}'",
+            })
+            return
+        booking = importlib.import_module(module_name)
+        print(f"[scheduler] Using engine: {module_name}")
 
     # ── Resolve platform credentials from env vars ────────────────────────
     email_var, pw_var = PLATFORM_CREDS[platform]
@@ -226,24 +236,54 @@ async def scrape_until_found(booking_id: str) -> None:
 
             page = await browser.new_page()
             try:
-                # 1. Login
-                await booking.login(page, cg_email, cg_password)
+                if adapter:
+                    # ── Custom adapter path ───────────────────────────────
+                    credentials = {"email": cg_email, "password": cg_password}
+                    ok = await adapter.login(page, credentials)
+                    if not ok:
+                        raise Exception("Adapter login returned False")
 
-                # 2. Search
-                slots = await booking.search_slots(
-                    page, course_url, booking_date, player_count, time_window
-                )
+                    await adapter.pre_search_hook(page)
 
-                # 3. Optional price filter
-                if max_price is not None:
-                    slots = [s for s in slots if s["green_fee"] <= max_price]
+                    tw = (time_window["earliest"], time_window["latest"])
+                    slots = await adapter.search_slots(page, booking_date, player_count, tw)
 
-                if not slots:
-                    raise _NoAvailability("No matching slots on this attempt")
+                    if max_price is not None:
+                        slots = [s for s in slots if s.get("price", 0) <= max_price]
 
-                # 4. Book the earliest available slot
-                best_slot    = slots[0]
-                confirm_code = await booking.book_slot(page, best_slot)
+                    if not slots:
+                        raise _NoAvailability("No matching slots on this attempt")
+
+                    best_slot   = slots[0]
+                    golfer_info = {
+                        "name":  job.get("golfer_name", ""),
+                        "email": job.get("golfer_email", ""),
+                        "phone": job.get("golfer_phone", ""),
+                    }
+                    result = await adapter.book_slot(page, best_slot, golfer_info)
+                    await adapter.post_booking_hook(page, result)
+
+                    if not result.get("success"):
+                        raise Exception(result.get("error") or "Adapter book_slot failed")
+
+                    confirm_code = result.get("confirmation", "")
+
+                else:
+                    # ── Standard platform engine path ─────────────────────
+                    await booking.login(page, cg_email, cg_password)
+
+                    slots = await booking.search_slots(
+                        page, course_url, booking_date, player_count, time_window
+                    )
+
+                    if max_price is not None:
+                        slots = [s for s in slots if s["green_fee"] <= max_price]
+
+                    if not slots:
+                        raise _NoAvailability("No matching slots on this attempt")
+
+                    best_slot    = slots[0]
+                    confirm_code = await booking.book_slot(page, best_slot)
 
                 # 5. Update Supabase — BOOKED
                 _update_job(job_id, {
