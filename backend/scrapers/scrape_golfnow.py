@@ -106,7 +106,7 @@ async def _scrape_city(page: Page, city_url: str, seen: set) -> list[dict]:
                     "Address":              address,
                     "Phone":                None,
                     "Course Website":       None,
-                    "Facility ID":          int(fid),
+                    "Facility ID":          2_000_000 + int(fid),  # offset avoids PK clash with ChronoGolf IDs
                     "booking_platform":     "golfnow",
                     "platform_course_id":   fid,
                     "platform_booking_url": book_url,
