@@ -1,233 +1,157 @@
 # =============================================================================
 # scrapers/scrape_golfnow.py
 # =============================================================================
-# Scrape all GolfNow facilities from their US course directory and upsert
-# into Course_Database.
+# Scrape GolfNow facilities from their sitemap XML (no Playwright needed).
 #
-# Approach (mirrors the original GolfNow_scraper.py but uses Playwright):
-#   1. Navigate to https://www.golfnow.com/golf-courses/{state} for each US state
-#   2. Collect all city links from the state page
-#   3. For each city page: scrape course cards to extract:
-#        - facility_id, course_name, address, tee_times_url, tee_time_booking
-#   4. Upsert into Course_Database using (booking_platform, platform_course_id)
+# Approach:
+#   1. Fetch https://www.golfnow.com/sitemap_index.xml
+#   2. Find the sitemap file(s) containing /tee-times/facility/ URLs
+#   3. Parse every facility URL → extract facility_id, slug, name
+#   4. Upsert into Course_Database
 #
 # Usage:
 #   cd backend/
 #   python -m scrapers.scrape_golfnow
-#   python -m scrapers.scrape_golfnow ma ca tx   # specific states only
 # =============================================================================
 
-import asyncio
 import re
 import sys
-from pathlib import Path
+import time
+import xml.etree.ElementTree as ET
+from urllib.parse import urljoin
 
+import requests
 from dotenv import load_dotenv, find_dotenv
-from playwright.async_api import async_playwright, Page, TimeoutError as PWTimeout
 
-from .utils import get_db, normalize_phone, normalize_address, upsert_courses
+from .utils import get_db, normalize_address, upsert_courses
 
 load_dotenv(find_dotenv())
 
-GOLFNOW_BASE = "https://www.golfnow.com"
-SCREENSHOT_DIR = Path("/tmp")
+GOLFNOW_BASE   = "https://www.golfnow.com"
+SITEMAP_INDEX  = "https://www.golfnow.com/sitemap_index.xml"
 
-_BROWSER_ARGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
 
-_US_STATES = [
-    "al","ak","az","ar","ca","co","ct","de","fl","ga",
-    "hi","id","il","in","ia","ks","ky","la","me","md",
-    "ma","mi","mn","ms","mo","mt","ne","nv","nh","nj",
-    "nm","ny","nc","nd","oh","ok","or","pa","ri","sc",
-    "sd","tn","tx","ut","vt","va","wa","wv","wi","wy","dc",
-]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 1 — Get city links from a state page
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def _get_city_links(page: Page, state: str) -> list[str]:
-    """Return all city-level course listing URLs for a given state."""
-    url = f"{GOLFNOW_BASE}/golf-courses/{state}"
-    try:
-        await page.goto(url, wait_until="networkidle", timeout=45_000)
-    except PWTimeout:
-        print(f"  [golfnow] Timeout on state page: {state}")
-        return []
-
-    # Allow JS-rendered content extra time to appear
-    await asyncio.sleep(2)
-
-    links = []
-    try:
-        anchors = await page.query_selector_all('a[href*="/golf-courses/"]')
-        for a in anchors:
-            href = await a.get_attribute("href") or ""
-            parts = href.rstrip("/").split("/golf-courses/")
-            if len(parts) == 2 and "/" in parts[1]:
-                full = href if href.startswith("http") else f"{GOLFNOW_BASE}{href}"
-                if full not in links:
-                    links.append(full)
-
-        # Fallback: try tee-times links if no city links found
-        if not links:
-            tee_anchors = await page.query_selector_all('a[href*="/tee-times/"]')
-            for a in tee_anchors:
-                href = await a.get_attribute("href") or ""
-                id_match = re.search(r"/facility/(\d+)", href)
-                if id_match:
-                    # Treat each facility link as its own "city" to scrape
-                    full = href if href.startswith("http") else f"{GOLFNOW_BASE}{href}"
-                    if full not in links:
-                        links.append(full)
-
-    except Exception as e:
-        print(f"  [golfnow] City link error for {state}: {e}")
-
-    return links
+_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 2 — Scrape course cards from a city page
-# ─────────────────────────────────────────────────────────────────────────────
+def _fetch_xml(url: str, retries: int = 3) -> ET.Element | None:
+    for attempt in range(retries):
+        try:
+            resp = requests.get(url, headers=_HEADERS, timeout=30)
+            if resp.status_code == 200:
+                return ET.fromstring(resp.content)
+            print(f"  [golfnow] HTTP {resp.status_code} for {url}")
+        except Exception as e:
+            print(f"  [golfnow] Fetch error ({attempt+1}/{retries}): {e}")
+        time.sleep(2 ** attempt)
+    return None
 
-async def _scrape_city(page: Page, city_url: str, seen_ids: set) -> list[dict]:
-    """Scrape all course cards from a GolfNow city page. Returns new rows."""
-    try:
-        await page.goto(city_url, wait_until="domcontentloaded", timeout=30_000)
-    except PWTimeout:
-        return []
 
-    # Scroll to load lazy content
-    for _ in range(5):
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(1)
+def _slug_to_name(slug: str) -> str:
+    """Convert URL slug like '1234-pine-valley-golf-club' → 'Pine Valley Golf Club'"""
+    name = re.sub(r"^\d+-", "", slug)          # remove leading facility id
+    name = name.replace("-", " ").title()
+    return name.strip()
 
+
+def _get_facility_sitemaps(index_root: ET.Element) -> list[str]:
+    """Return sitemap URLs that likely contain facility/tee-times pages."""
+    urls = []
+    for sitemap in index_root.findall("sm:sitemap", _NS):
+        loc = sitemap.findtext("sm:loc", namespaces=_NS) or ""
+        if "facilit" in loc or "tee-time" in loc or "golf-course" in loc:
+            urls.append(loc)
+    # If none matched by name, return all sitemaps for full scan
+    if not urls:
+        urls = [
+            s.findtext("sm:loc", namespaces=_NS) or ""
+            for s in index_root.findall("sm:sitemap", _NS)
+        ]
+    return [u for u in urls if u]
+
+
+def _parse_facilities_from_sitemap(sitemap_root: ET.Element) -> list[dict]:
     rows = []
-
-    try:
-        # GolfNow course cards have facility links: /tee-times/facility/{id}-{slug}
-        cards = await page.query_selector_all(
-            'a[href*="/tee-times/facility/"], '
-            'div[class*="facility"], '
-            'div[class*="course-card"]'
-        )
-
-        for card in cards:
-            try:
-                # Get the booking link
-                link_el = card if await card.get_attribute("href") else \
-                          await card.query_selector('a[href*="/tee-times/facility/"]')
-                if not link_el:
-                    continue
-
-                href = await link_el.get_attribute("href") or ""
-                id_match = re.search(r"/facility/(\d+)", href)
-                if not id_match:
-                    continue
-
-                fid = id_match.group(1)
-                if fid in seen_ids:
-                    continue
-                seen_ids.add(fid)
-
-                slug_match = re.search(r"/facility/(\d+-[^/?#]+)", href)
-                slug = slug_match.group(1) if slug_match else fid
-                book_url = f"{GOLFNOW_BASE}/tee-times/facility/{slug}"
-
-                # Course name
-                name = ""
-                for sel in ["h2", "h3", ".facility-name", "[class*='name']", "strong"]:
-                    el = await card.query_selector(sel)
-                    if el:
-                        name = (await el.inner_text()).strip()
-                        if name:
-                            break
-
-                # Address
-                address = ""
-                for sel in [".address", "[class*='address']", "[class*='location']", "p"]:
-                    el = await card.query_selector(sel)
-                    if el:
-                        address = (await el.inner_text()).strip()
-                        if address:
-                            break
-
-                if not name:
-                    name = slug.replace("-", " ").title()
-                    name = re.sub(r"^\d+\s*", "", name).strip()
-
-                rows.append({
-                    "Course Name":          name,
-                    "Address":              normalize_address(address) or None,
-                    "Phone":                None,
-                    "Course Website":       None,
-                    "booking_platform":     "golfnow",
-                    "platform_course_id":   fid,
-                    "platform_booking_url": book_url,
-                })
-
-            except Exception:
-                continue
-
-    except Exception as e:
-        print(f"  [golfnow] Scrape error on {city_url}: {e}")
-
+    for url_el in sitemap_root.findall("sm:url", _NS):
+        loc = url_el.findtext("sm:loc", namespaces=_NS) or ""
+        # Match: /tee-times/facility/{id}-{slug}
+        m = re.search(r"/tee-times/facility/(\d+)-([^/?#]+)", loc)
+        if not m:
+            continue
+        fid  = m.group(1)
+        slug = m.group(2)
+        name = _slug_to_name(slug)
+        book_url = f"{GOLFNOW_BASE}/tee-times/facility/{fid}-{slug}"
+        rows.append({
+            "Course Name":          name,
+            "Address":              None,
+            "Phone":                None,
+            "Course Website":       None,
+            "booking_platform":     "golfnow",
+            "platform_course_id":   fid,
+            "platform_booking_url": book_url,
+        })
     return rows
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def _run_async(states: list[str] | None = None) -> int:
-    db       = get_db()
-    seen_ids = set()
-    states   = states or _US_STATES
-
-    print(f"[scrape_golfnow] Starting — {len(states)} states to scrape")
-
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True, args=_BROWSER_ARGS)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            )
-        )
-        page = await context.new_page()
-
-        all_rows = []
-        for state in states:
-            print(f"  [golfnow] State: {state.upper()}")
-            city_links = await _get_city_links(page, state)
-            print(f"  [golfnow]   {len(city_links)} cities found")
-
-            for city_url in city_links:
-                rows = await _scrape_city(page, city_url, seen_ids)
-                all_rows.extend(rows)
-                await asyncio.sleep(0.5)
-
-                # Batch upsert every 500 rows
-                if len(all_rows) >= 500:
-                    upsert_courses(db, all_rows, "golfnow")
-                    print(f"  [golfnow] Upserted batch — total unique: {len(seen_ids)}")
-                    all_rows = []
-
-        await browser.close()
-
-    # Final batch
-    upsert_courses(db, all_rows, "golfnow")
-    print(f"[scrape_golfnow] Done — {len(seen_ids)} unique GolfNow facilities.")
-    return len(seen_ids)
-
-
 def run(states: list[str] | None = None) -> int:
-    return asyncio.run(_run_async(states))
+    """states param unused — sitemap covers all US facilities."""
+    db = get_db()
+
+    print("[scrape_golfnow] Fetching sitemap index…")
+    index_root = _fetch_xml(SITEMAP_INDEX)
+
+    if index_root is None:
+        # Fallback: try direct sitemap
+        print("[scrape_golfnow] Index not found, trying direct sitemap…")
+        index_root = _fetch_xml(f"{GOLFNOW_BASE}/sitemap.xml")
+
+    if index_root is None:
+        print("[scrape_golfnow] ERROR: Could not fetch any sitemap.")
+        return 0
+
+    # Check if this is a sitemap index or a direct sitemap
+    tag = index_root.tag.split("}")[-1] if "}" in index_root.tag else index_root.tag
+
+    all_rows: list[dict] = []
+
+    if tag == "sitemapindex":
+        sitemap_urls = _get_facility_sitemaps(index_root)
+        print(f"[scrape_golfnow] Found {len(sitemap_urls)} sitemap file(s) to scan")
+
+        for i, sm_url in enumerate(sitemap_urls, 1):
+            print(f"  [golfnow] Sitemap {i}/{len(sitemap_urls)}: {sm_url}")
+            sm_root = _fetch_xml(sm_url)
+            if sm_root is None:
+                continue
+            rows = _parse_facilities_from_sitemap(sm_root)
+            all_rows.extend(rows)
+            print(f"  [golfnow]   {len(rows)} facilities found")
+            time.sleep(0.5)
+
+            if len(all_rows) >= 500:
+                upsert_courses(db, all_rows, "golfnow")
+                print(f"  [golfnow] Upserted batch — running total: {len(all_rows)}")
+                all_rows = []
+
+    else:
+        # Direct sitemap
+        all_rows = _parse_facilities_from_sitemap(index_root)
+        print(f"[scrape_golfnow] {len(all_rows)} facilities found in sitemap")
+
+    upsert_courses(db, all_rows, "golfnow")
+    total = len(all_rows)
+    print(f"[scrape_golfnow] Done — {total} GolfNow facilities upserted.")
+    return total
 
 
 if __name__ == "__main__":
-    state_args = [s.lower() for s in sys.argv[1:]] if len(sys.argv) > 1 else None
-    run(state_args)
+    run()
