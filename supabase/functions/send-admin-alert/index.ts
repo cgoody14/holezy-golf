@@ -21,6 +21,7 @@ interface AlertRequest {
     totalPrice: number;
     courseAddress?: string;
     facilityId?: string;
+    isCustomCourse?: boolean;
   };
   courseDetails?: {
     name: string;
@@ -71,15 +72,24 @@ const handler = async (req: Request): Promise<Response> => {
         <p>Check your admin dashboard for more details.</p>
       `;
     } else if (type === 'booking_made') {
-      subject = "🏌️ New Golf Booking Made";
+      const isCustom = bookingDetails?.isCustomCourse === true;
+      subject = isCustom
+        ? "🏌️ New Golf Booking Made — ⚠️ CUSTOM COURSE"
+        : "🏌️ New Golf Booking Made";
       htmlContent = `
+        ${isCustom ? `
+        <div style="background:#fff3cd;border:2px solid #ffc107;border-radius:6px;padding:14px 18px;margin-bottom:16px;">
+          <strong style="color:#856404;font-size:16px;">⚠️ CUSTOM COURSE — Manual Action Required</strong><br/>
+          <span style="color:#856404;">This course was added manually by the user and is NOT on a booking platform.
+          You will need to book this tee time directly with the course.</span>
+        </div>` : ''}
         <h2>New Booking Alert</h2>
         <p>A new golf booking has been made:</p>
         <ul>
           <li><strong>Customer:</strong> ${userName || userEmail}</li>
           <li><strong>Email:</strong> ${userEmail}</li>
           <li><strong>Phone:</strong> ${userPhone || 'Not provided'}</li>
-          <li><strong>Course:</strong> ${bookingDetails?.course}</li>
+          <li><strong>Course:</strong> ${bookingDetails?.course}${isCustom ? ' <em style="color:#856404;">(custom course)</em>' : ''}</li>
           <li><strong>Course Address:</strong> ${bookingDetails?.courseAddress || 'Not provided'}</li>
           <li><strong>Facility ID:</strong> ${bookingDetails?.facilityId || 'Not provided'}</li>
           <li><strong>Date:</strong> ${bookingDetails?.date}</li>

@@ -129,7 +129,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
   };
 
   const handleCustomCourseSubmit = async () => {
-    if (!customCourse["Course Name"].trim()) return;
+    if (!customCourse["Course Name"].trim() || !customCourse.city.trim() || !customCourse.state.trim()) return;
 
     try {
       const { data: existingCourses, error: fetchError } = await supabase
@@ -405,12 +405,12 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
               />
               <div className="grid grid-cols-2 gap-2">
                 <Input
-                  placeholder="City (optional)"
+                  placeholder="City *"
                   value={customCourse.city}
                   onChange={(e) => setCustomCourse(prev => ({ ...prev, city: e.target.value }))}
                 />
                 <Input
-                  placeholder="State (optional)"
+                  placeholder="State *"
                   value={customCourse.state}
                   onChange={(e) => setCustomCourse(prev => ({ ...prev, state: e.target.value }))}
                 />
@@ -421,7 +421,7 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                 onClick={handleCustomCourseSubmit}
                 size="sm"
                 className="flex-1 bg-green-700 hover:bg-green-800 text-white"
-                disabled={!customCourse["Course Name"].trim()}
+                disabled={!customCourse["Course Name"].trim() || !customCourse.city.trim() || !customCourse.state.trim()}
               >
                 Add Course
               </Button>

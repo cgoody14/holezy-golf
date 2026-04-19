@@ -443,7 +443,8 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
               course: bookingData.preferredCourse,
               date: bookingData.date,
               players: bookingData.numberOfPlayers,
-              totalPrice: calculateTotal()
+              totalPrice: calculateTotal(),
+              isCustomCourse: facilityId !== null && facilityId >= 900000,
             }
           }
         });
