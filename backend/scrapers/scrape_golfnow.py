@@ -1,153 +1,170 @@
 # =============================================================================
 # scrapers/scrape_golfnow.py
 # =============================================================================
-# Scrape GolfNow facilities by recursively walking their sitemap tree.
-# The course directory sitemap is nested 2-3 levels deep.
+# Scrape GolfNow facilities with online booking using Playwright.
+#
+# URL flow:
+#   https://www.golfnow.com/course-directory/us
+#     → /course-directory/us/{state}          (state pages)
+#       → /course-directory/us/{state}/{city} (city pages)
+#         → section#on-platform               (courses with online booking)
+#           → a[data-facilityid]              (individual course tiles)
+#
+# Usage:
+#   python -m scrapers.scrape_golfnow
+#   python -m scrapers.scrape_golfnow al tx ca   # specific states only
 # =============================================================================
 
+import asyncio
 import re
-import time
-import xml.etree.ElementTree as ET
+import sys
 
-import requests
 from dotenv import load_dotenv, find_dotenv
+from playwright.async_api import async_playwright, Page, TimeoutError as PWTimeout
 
 from .utils import get_db, upsert_courses
 
 load_dotenv(find_dotenv())
 
-GOLFNOW_BASE = "https://www.golfnow.com"
-SITEMAP_ROOT = "https://www.golfnow.com/sitemap.xml"
+BASE        = "https://www.golfnow.com"
+DIR_ROOT    = f"{BASE}/course-directory/us"
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-}
+_BROWSER_ARGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
 
-_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+_US_STATES = [
+    "al","ak","az","ar","ca","co","ct","de","fl","ga",
+    "hi","id","il","in","ia","ks","ky","la","me","md",
+    "ma","mi","mn","ms","mo","mt","ne","nv","nh","nj",
+    "nm","ny","nc","nd","oh","ok","or","pa","ri","sc",
+    "sd","tn","tx","ut","vt","va","wa","wv","wi","wy","dc",
+]
 
 
-def _fetch_xml(url: str) -> ET.Element | None:
+async def _get_city_links(page: Page, state: str) -> list[str]:
+    """Return all city page URLs for a state."""
+    url = f"{DIR_ROOT}/{state}"
     try:
-        resp = requests.get(url, headers=_HEADERS, timeout=30)
-        if resp.status_code == 200:
-            return ET.fromstring(resp.content)
-        print(f"  [golfnow] HTTP {resp.status_code}: {url}")
+        await page.goto(url, wait_until="networkidle", timeout=45_000)
+    except PWTimeout:
+        print(f"  [golfnow] Timeout on state: {state}")
+        return []
+
+    await asyncio.sleep(1)
+
+    links = []
+    try:
+        anchors = await page.query_selector_all(f'a[href*="/course-directory/us/{state}/"]')
+        for a in anchors:
+            href = await a.get_attribute("href") or ""
+            full = href if href.startswith("http") else f"{BASE}{href}"
+            if full not in links:
+                links.append(full)
     except Exception as e:
-        print(f"  [golfnow] Fetch error: {e}")
-    return None
+        print(f"  [golfnow] City link error ({state}): {e}")
+
+    return links
 
 
-def _is_sitemap_index(root: ET.Element) -> bool:
-    tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
-    return tag == "sitemapindex"
-
-
-def _get_locs(root: ET.Element) -> list[str]:
-    return [el.text.strip() for el in root.findall(".//sm:loc", _NS) if el.text]
-
-
-def _collect_all_urls(url: str, depth: int = 0, max_depth: int = 3) -> list[str]:
-    """Recursively walk sitemap indexes, collecting all leaf URLs."""
-    if depth > max_depth:
+async def _scrape_city(page: Page, city_url: str, seen: set) -> list[dict]:
+    """Scrape online-booking courses from a city page's #on-platform section."""
+    try:
+        await page.goto(city_url, wait_until="networkidle", timeout=45_000)
+    except PWTimeout:
         return []
 
-    root = _fetch_xml(url)
-    if root is None:
-        return []
+    await asyncio.sleep(1)
 
-    locs = _get_locs(root)
-
-    if _is_sitemap_index(root):
-        all_urls = []
-        for loc in locs:
-            time.sleep(0.2)
-            all_urls.extend(_collect_all_urls(loc, depth + 1, max_depth))
-        return all_urls
-    else:
-        return locs
-
-
-def _slug_to_name(slug: str) -> str:
-    name = re.sub(r"-\d+$", "", slug)
-    name = re.sub(r"^\d+-", "", name)
-    return name.replace("-", " ").title().strip()
-
-
-def _rows_from_urls(urls: list[str]) -> list[dict]:
     rows = []
-    seen: set[str] = set()
+    try:
+        # Only courses in the #on-platform section have online booking
+        platform_section = await page.query_selector("section#on-platform")
+        if not platform_section:
+            return []
 
-    for loc in urls:
-        # Pattern: /tee-times/facility/1234-slug  or  /tee-times/facility/1234
-        m = re.search(r"/tee-times/facility/(\d+)(?:-([^/?#]+))?", loc)
-        if m:
-            fid  = m.group(1)
-            slug = m.group(2) or fid
-            if fid not in seen:
+        # Each course tile has an anchor with data-facilityid
+        tiles = await platform_section.query_selector_all("a[data-facilityid]")
+
+        for tile in tiles:
+            try:
+                fid   = await tile.get_attribute("data-facilityid") or ""
+                name  = await tile.get_attribute("data-facilityname") or ""
+                city  = await tile.get_attribute("data-city") or ""
+                state = await tile.get_attribute("data-state") or ""
+
+                if not fid or fid in seen:
+                    continue
                 seen.add(fid)
+
+                # Build slug from name for clean booking URL
+                slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+                book_url = f"{BASE}/tee-times/facility/{fid}-{slug}/search"
+
+                address = f"{city}, {state}" if city and state else None
+
                 rows.append({
-                    "Course Name":          _slug_to_name(slug),
-                    "Address":              None,
+                    "Course Name":          name,
+                    "Address":              address,
                     "Phone":                None,
                     "Course Website":       None,
                     "booking_platform":     "golfnow",
                     "platform_course_id":   fid,
-                    "platform_booking_url": f"{GOLFNOW_BASE}/tee-times/facility/{fid}-{slug}",
+                    "platform_booking_url": book_url,
                 })
-            continue
+            except Exception:
+                continue
 
-        # Pattern: /golf-courses/{state}/{city}/{slug}  (deepest level)
-        m2 = re.search(r"/golf-courses/[a-z-]+/[a-z-]+/([^/?#]+)", loc)
-        if m2:
-            slug = m2.group(1)
-            id_m = re.search(r"-(\d+)$", slug)
-            fid  = id_m.group(1) if id_m else None
-            if fid and fid not in seen:
-                seen.add(fid)
-                rows.append({
-                    "Course Name":          _slug_to_name(slug),
-                    "Address":              None,
-                    "Phone":                None,
-                    "Course Website":       None,
-                    "booking_platform":     "golfnow",
-                    "platform_course_id":   fid,
-                    "platform_booking_url": loc,
-                })
+    except Exception as e:
+        print(f"  [golfnow] Scrape error on {city_url}: {e}")
 
     return rows
 
 
+async def _run_async(states: list[str] | None = None) -> int:
+    db       = get_db()
+    seen: set[str] = set()
+    states   = states or _US_STATES
+
+    print(f"[scrape_golfnow] Starting — {len(states)} states")
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True, args=_BROWSER_ARGS)
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        )
+        page = await context.new_page()
+
+        all_rows: list[dict] = []
+
+        for state in states:
+            print(f"  [golfnow] State: {state.upper()}")
+            city_links = await _get_city_links(page, state)
+            print(f"  [golfnow]   {len(city_links)} cities found")
+
+            for city_url in city_links:
+                rows = await _scrape_city(page, city_url, seen)
+                all_rows.extend(rows)
+                await asyncio.sleep(0.5)
+
+                if len(all_rows) >= 500:
+                    upsert_courses(db, all_rows, "golfnow")
+                    print(f"  [golfnow] Upserted batch — {len(seen)} unique so far")
+                    all_rows = []
+
+        await browser.close()
+
+    upsert_courses(db, all_rows, "golfnow")
+    print(f"[scrape_golfnow] Done — {len(seen)} unique GolfNow facilities.")
+    return len(seen)
+
+
 def run(states: list[str] | None = None) -> int:
-    db = get_db()
-
-    # Only walk the course directory branch — skip destinations/spotlight/static
-    print("[scrape_golfnow] Fetching course directory sitemap tree…")
-    course_dir_urls = _collect_all_urls(
-        "https://www.golfnow.com/sitemap_coursedirectory.xml",
-        max_depth=4
-    )
-
-    print(f"[scrape_golfnow] {len(course_dir_urls)} total URLs collected")
-    if course_dir_urls:
-        print(f"  Sample: {course_dir_urls[:5]}")
-
-    rows = _rows_from_urls(course_dir_urls)
-    print(f"[scrape_golfnow] {len(rows)} unique facilities matched")
-
-    if rows:
-        # Upsert in batches
-        batch_size = 500
-        for i in range(0, len(rows), batch_size):
-            upsert_courses(db, rows[i:i + batch_size], "golfnow")
-            print(f"  [golfnow] Upserted {min(i + batch_size, len(rows))}/{len(rows)}")
-
-    print(f"[scrape_golfnow] Done — {len(rows)} GolfNow facilities upserted.")
-    return len(rows)
+    return asyncio.run(_run_async(states))
 
 
 if __name__ == "__main__":
-    run()
+    state_args = [s.lower() for s in sys.argv[1:]] if len(sys.argv) > 1 else None
+    run(state_args)
