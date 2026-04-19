@@ -37,6 +37,7 @@ const BookingForm = () => {
   const { toast } = useToast();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showBookingDialog, setShowBookingDialog] = useState(false);
   const [user, setUser] = useState(null);
   const [storedDetails, setStoredDetails] = useState<StoredBookingDetails | null>(null);
   const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
@@ -78,9 +79,9 @@ const BookingForm = () => {
       try {
         const details: StoredBookingDetails = JSON.parse(storedDetailsStr);
         const dateObj = new Date(details.date);
-        
+
         setStoredDetails(details);
-        
+
         setBookingSummary({
           course: storedCourse,
           date: format(dateObj, 'PPP'),
@@ -88,7 +89,7 @@ const BookingForm = () => {
           earliestTime: details.earliestTimeStr,
           latestTime: details.latestTimeStr,
         });
-        
+
         // Pre-fill form data with booking details
         setFormData(prev => ({
           ...prev,
@@ -101,6 +102,9 @@ const BookingForm = () => {
       } catch (error) {
         console.error('Error parsing booking details:', error);
       }
+    } else {
+      // No booking details yet — open the selection wizard
+      setShowBookingDialog(true);
     }
   };
 
@@ -241,6 +245,22 @@ const BookingForm = () => {
             Complete your contact information below
           </p>
         </div>
+
+        {/* Prompt when no booking details yet (user dismissed dialog or arrived fresh) */}
+        {!bookingSummary && (
+          <Card className="mb-6 border-dashed border-2 border-primary/30 bg-primary/5">
+            <CardContent className="py-8 text-center space-y-4">
+              <MapPin className="w-10 h-10 mx-auto text-primary/60" />
+              <div>
+                <p className="font-semibold text-lg">Select your tee time details</p>
+                <p className="text-muted-foreground text-sm mt-1">Choose your course, date, time, and number of players to continue.</p>
+              </div>
+              <Button onClick={() => setShowBookingDialog(true)} className="px-8">
+                Select a Tee Time
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Booking Summary */}
         {bookingSummary && (
@@ -386,6 +406,17 @@ const BookingForm = () => {
           }}
         />
 
+        {/* Fresh booking dialog — shown when user arrives with no session data */}
+        <StateSelectionDialog
+          isOpen={showBookingDialog}
+          onClose={() => setShowBookingDialog(false)}
+          onStateSelect={() => {
+            setShowBookingDialog(false);
+            loadBookingDetails();
+          }}
+        />
+
+        {/* Edit dialog — shown when user has existing booking details and clicks Edit */}
         {selectedStateCode && storedDetails && (
           <StateSelectionDialog
             isOpen={showEditDialog}
