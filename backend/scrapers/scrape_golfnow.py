@@ -2,23 +2,12 @@
 # scrapers/scrape_golfnow.py
 # =============================================================================
 # Scrape GolfNow facilities from their sitemap XML (no Playwright needed).
-#
-# Approach:
-#   1. Fetch https://www.golfnow.com/sitemap_index.xml
-#   2. Find the sitemap file(s) containing /tee-times/facility/ URLs
-#   3. Parse every facility URL → extract facility_id, slug, name
-#   4. Upsert into Course_Database
-#
-# Usage:
-#   cd backend/
-#   python -m scrapers.scrape_golfnow
 # =============================================================================
 
 import re
 import sys
 import time
 import xml.etree.ElementTree as ET
-from urllib.parse import urljoin
 
 import requests
 from dotenv import load_dotenv, find_dotenv
@@ -27,8 +16,8 @@ from .utils import get_db, normalize_address, upsert_courses
 
 load_dotenv(find_dotenv())
 
-GOLFNOW_BASE   = "https://www.golfnow.com"
-SITEMAP_INDEX  = "https://www.golfnow.com/sitemap_index.xml"
+GOLFNOW_BASE  = "https://www.golfnow.com"
+SITEMAP_ROOT  = "https://www.golfnow.com/sitemap.xml"
 
 _HEADERS = {
     "User-Agent": (
@@ -36,121 +25,119 @@ _HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
 _NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 
-def _fetch_xml(url: str, retries: int = 3) -> ET.Element | None:
-    for attempt in range(retries):
-        try:
-            resp = requests.get(url, headers=_HEADERS, timeout=30)
-            if resp.status_code == 200:
-                return ET.fromstring(resp.content)
-            print(f"  [golfnow] HTTP {resp.status_code} for {url}")
-        except Exception as e:
-            print(f"  [golfnow] Fetch error ({attempt+1}/{retries}): {e}")
-        time.sleep(2 ** attempt)
+def _fetch_xml(url: str) -> ET.Element | None:
+    try:
+        resp = requests.get(url, headers=_HEADERS, timeout=30)
+        if resp.status_code == 200:
+            return ET.fromstring(resp.content)
+        print(f"  [golfnow] HTTP {resp.status_code} for {url}")
+    except Exception as e:
+        print(f"  [golfnow] Fetch error: {e}")
     return None
 
 
+def _all_urls_from_sitemap(root: ET.Element) -> list[str]:
+    return [
+        el.text.strip()
+        for el in root.findall(".//sm:loc", _NS)
+        if el.text
+    ]
+
+
 def _slug_to_name(slug: str) -> str:
-    """Convert URL slug like '1234-pine-valley-golf-club' → 'Pine Valley Golf Club'"""
-    name = re.sub(r"^\d+-", "", slug)          # remove leading facility id
-    name = name.replace("-", " ").title()
-    return name.strip()
+    name = re.sub(r"-\d+$", "", slug)   # remove trailing id if present
+    name = re.sub(r"^\d+-", "", name)   # remove leading id if present
+    return name.replace("-", " ").title().strip()
 
 
-def _get_facility_sitemaps(index_root: ET.Element) -> list[str]:
-    """Return sitemap URLs that likely contain facility/tee-times pages."""
-    urls = []
-    for sitemap in index_root.findall("sm:sitemap", _NS):
-        loc = sitemap.findtext("sm:loc", namespaces=_NS) or ""
-        if "facilit" in loc or "tee-time" in loc or "golf-course" in loc:
-            urls.append(loc)
-    # If none matched by name, return all sitemaps for full scan
-    if not urls:
-        urls = [
-            s.findtext("sm:loc", namespaces=_NS) or ""
-            for s in index_root.findall("sm:sitemap", _NS)
-        ]
-    return [u for u in urls if u]
-
-
-def _parse_facilities_from_sitemap(sitemap_root: ET.Element) -> list[dict]:
+def _rows_from_urls(urls: list[str]) -> list[dict]:
     rows = []
-    for url_el in sitemap_root.findall("sm:url", _NS):
-        loc = url_el.findtext("sm:loc", namespaces=_NS) or ""
-        # Match: /tee-times/facility/{id}-{slug}
+    seen = set()
+
+    for loc in urls:
+        # Pattern 1: /tee-times/facility/1234-slug
         m = re.search(r"/tee-times/facility/(\d+)-([^/?#]+)", loc)
-        if not m:
+        if m:
+            fid, slug = m.group(1), m.group(2)
+            if fid not in seen:
+                seen.add(fid)
+                rows.append({
+                    "Course Name":          _slug_to_name(slug),
+                    "Address":              None,
+                    "Phone":                None,
+                    "Course Website":       None,
+                    "booking_platform":     "golfnow",
+                    "platform_course_id":   fid,
+                    "platform_booking_url": f"{GOLFNOW_BASE}/tee-times/facility/{fid}-{slug}",
+                })
             continue
-        fid  = m.group(1)
-        slug = m.group(2)
-        name = _slug_to_name(slug)
-        book_url = f"{GOLFNOW_BASE}/tee-times/facility/{fid}-{slug}"
-        rows.append({
-            "Course Name":          name,
-            "Address":              None,
-            "Phone":                None,
-            "Course Website":       None,
-            "booking_platform":     "golfnow",
-            "platform_course_id":   fid,
-            "platform_booking_url": book_url,
-        })
+
+        # Pattern 2: /golf-courses/state/city/slug-id  or  /golf-courses/state/city/slug
+        m2 = re.search(r"/golf-courses/[a-z]{2}/[^/]+/([^/?#]+)", loc)
+        if m2:
+            slug = m2.group(1)
+            id_m = re.search(r"-(\d+)$", slug)
+            fid  = id_m.group(1) if id_m else re.sub(r"[^a-z0-9]", "", slug)
+            if fid not in seen:
+                seen.add(fid)
+                rows.append({
+                    "Course Name":          _slug_to_name(slug),
+                    "Address":              None,
+                    "Phone":                None,
+                    "Course Website":       None,
+                    "booking_platform":     "golfnow",
+                    "platform_course_id":   fid,
+                    "platform_booking_url": loc,
+                })
+
     return rows
 
 
 def run(states: list[str] | None = None) -> int:
-    """states param unused — sitemap covers all US facilities."""
     db = get_db()
 
-    print("[scrape_golfnow] Fetching sitemap index…")
-    index_root = _fetch_xml(SITEMAP_INDEX)
-
-    if index_root is None:
-        # Fallback: try direct sitemap
-        print("[scrape_golfnow] Index not found, trying direct sitemap…")
-        index_root = _fetch_xml(f"{GOLFNOW_BASE}/sitemap.xml")
-
-    if index_root is None:
-        print("[scrape_golfnow] ERROR: Could not fetch any sitemap.")
+    print("[scrape_golfnow] Fetching sitemap…")
+    root = _fetch_xml(SITEMAP_ROOT)
+    if root is None:
+        print("[scrape_golfnow] ERROR: Could not fetch sitemap.")
         return 0
 
-    # Check if this is a sitemap index or a direct sitemap
-    tag = index_root.tag.split("}")[-1] if "}" in index_root.tag else index_root.tag
+    tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
 
-    all_rows: list[dict] = []
+    all_urls: list[str] = []
 
     if tag == "sitemapindex":
-        sitemap_urls = _get_facility_sitemaps(index_root)
-        print(f"[scrape_golfnow] Found {len(sitemap_urls)} sitemap file(s) to scan")
-
-        for i, sm_url in enumerate(sitemap_urls, 1):
-            print(f"  [golfnow] Sitemap {i}/{len(sitemap_urls)}: {sm_url}")
-            sm_root = _fetch_xml(sm_url)
-            if sm_root is None:
-                continue
-            rows = _parse_facilities_from_sitemap(sm_root)
-            all_rows.extend(rows)
-            print(f"  [golfnow]   {len(rows)} facilities found")
-            time.sleep(0.5)
-
-            if len(all_rows) >= 500:
-                upsert_courses(db, all_rows, "golfnow")
-                print(f"  [golfnow] Upserted batch — running total: {len(all_rows)}")
-                all_rows = []
-
+        child_urls = _all_urls_from_sitemap(root)
+        print(f"[scrape_golfnow] Sitemap index with {len(child_urls)} children")
+        for i, sm_url in enumerate(child_urls, 1):
+            print(f"  [golfnow] {i}/{len(child_urls)}: {sm_url}")
+            child = _fetch_xml(sm_url)
+            if child:
+                urls = _all_urls_from_sitemap(child)
+                # Debug: show first 3 URLs from each sitemap
+                if urls:
+                    print(f"    Sample URLs: {urls[:3]}")
+                all_urls.extend(urls)
+            time.sleep(0.3)
     else:
-        # Direct sitemap
-        all_rows = _parse_facilities_from_sitemap(index_root)
-        print(f"[scrape_golfnow] {len(all_rows)} facilities found in sitemap")
+        all_urls = _all_urls_from_sitemap(root)
+        print(f"[scrape_golfnow] Direct sitemap with {len(all_urls)} URLs")
+        if all_urls:
+            print(f"  Sample URLs: {all_urls[:5]}")
 
-    upsert_courses(db, all_rows, "golfnow")
-    total = len(all_rows)
-    print(f"[scrape_golfnow] Done — {total} GolfNow facilities upserted.")
-    return total
+    rows = _rows_from_urls(all_urls)
+    print(f"[scrape_golfnow] {len(rows)} facilities matched")
+
+    if rows:
+        upsert_courses(db, rows, "golfnow")
+
+    print(f"[scrape_golfnow] Done — {len(rows)} GolfNow facilities upserted.")
+    return len(rows)
 
 
 if __name__ == "__main__":
