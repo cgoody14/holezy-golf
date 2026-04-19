@@ -51,22 +51,37 @@ async def _get_city_links(page: Page, state: str) -> list[str]:
     """Return all city-level course listing URLs for a given state."""
     url = f"{GOLFNOW_BASE}/golf-courses/{state}"
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+        await page.goto(url, wait_until="networkidle", timeout=45_000)
     except PWTimeout:
         print(f"  [golfnow] Timeout on state page: {state}")
         return []
+
+    # Allow JS-rendered content extra time to appear
+    await asyncio.sleep(2)
 
     links = []
     try:
         anchors = await page.query_selector_all('a[href*="/golf-courses/"]')
         for a in anchors:
             href = await a.get_attribute("href") or ""
-            # City links: /golf-courses/{state}/{city} (two path segments after golf-courses)
             parts = href.rstrip("/").split("/golf-courses/")
             if len(parts) == 2 and "/" in parts[1]:
                 full = href if href.startswith("http") else f"{GOLFNOW_BASE}{href}"
                 if full not in links:
                     links.append(full)
+
+        # Fallback: try tee-times links if no city links found
+        if not links:
+            tee_anchors = await page.query_selector_all('a[href*="/tee-times/"]')
+            for a in tee_anchors:
+                href = await a.get_attribute("href") or ""
+                id_match = re.search(r"/facility/(\d+)", href)
+                if id_match:
+                    # Treat each facility link as its own "city" to scrape
+                    full = href if href.startswith("http") else f"{GOLFNOW_BASE}{href}"
+                    if full not in links:
+                        links.append(full)
+
     except Exception as e:
         print(f"  [golfnow] City link error for {state}: {e}")
 
