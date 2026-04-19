@@ -1,23 +1,23 @@
 # =============================================================================
 # scrapers/scrape_golfnow.py
 # =============================================================================
-# Scrape GolfNow facilities from their sitemap XML (no Playwright needed).
+# Scrape GolfNow facilities by recursively walking their sitemap tree.
+# The course directory sitemap is nested 2-3 levels deep.
 # =============================================================================
 
 import re
-import sys
 import time
 import xml.etree.ElementTree as ET
 
 import requests
 from dotenv import load_dotenv, find_dotenv
 
-from .utils import get_db, normalize_address, upsert_courses
+from .utils import get_db, upsert_courses
 
 load_dotenv(find_dotenv())
 
-GOLFNOW_BASE  = "https://www.golfnow.com"
-SITEMAP_ROOT  = "https://www.golfnow.com/sitemap.xml"
+GOLFNOW_BASE = "https://www.golfnow.com"
+SITEMAP_ROOT = "https://www.golfnow.com/sitemap.xml"
 
 _HEADERS = {
     "User-Agent": (
@@ -35,35 +35,58 @@ def _fetch_xml(url: str) -> ET.Element | None:
         resp = requests.get(url, headers=_HEADERS, timeout=30)
         if resp.status_code == 200:
             return ET.fromstring(resp.content)
-        print(f"  [golfnow] HTTP {resp.status_code} for {url}")
+        print(f"  [golfnow] HTTP {resp.status_code}: {url}")
     except Exception as e:
         print(f"  [golfnow] Fetch error: {e}")
     return None
 
 
-def _all_urls_from_sitemap(root: ET.Element) -> list[str]:
-    return [
-        el.text.strip()
-        for el in root.findall(".//sm:loc", _NS)
-        if el.text
-    ]
+def _is_sitemap_index(root: ET.Element) -> bool:
+    tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
+    return tag == "sitemapindex"
+
+
+def _get_locs(root: ET.Element) -> list[str]:
+    return [el.text.strip() for el in root.findall(".//sm:loc", _NS) if el.text]
+
+
+def _collect_all_urls(url: str, depth: int = 0, max_depth: int = 3) -> list[str]:
+    """Recursively walk sitemap indexes, collecting all leaf URLs."""
+    if depth > max_depth:
+        return []
+
+    root = _fetch_xml(url)
+    if root is None:
+        return []
+
+    locs = _get_locs(root)
+
+    if _is_sitemap_index(root):
+        all_urls = []
+        for loc in locs:
+            time.sleep(0.2)
+            all_urls.extend(_collect_all_urls(loc, depth + 1, max_depth))
+        return all_urls
+    else:
+        return locs
 
 
 def _slug_to_name(slug: str) -> str:
-    name = re.sub(r"-\d+$", "", slug)   # remove trailing id if present
-    name = re.sub(r"^\d+-", "", name)   # remove leading id if present
+    name = re.sub(r"-\d+$", "", slug)
+    name = re.sub(r"^\d+-", "", name)
     return name.replace("-", " ").title().strip()
 
 
 def _rows_from_urls(urls: list[str]) -> list[dict]:
     rows = []
-    seen = set()
+    seen: set[str] = set()
 
     for loc in urls:
-        # Pattern 1: /tee-times/facility/1234-slug
-        m = re.search(r"/tee-times/facility/(\d+)-([^/?#]+)", loc)
+        # Pattern: /tee-times/facility/1234-slug  or  /tee-times/facility/1234
+        m = re.search(r"/tee-times/facility/(\d+)(?:-([^/?#]+))?", loc)
         if m:
-            fid, slug = m.group(1), m.group(2)
+            fid  = m.group(1)
+            slug = m.group(2) or fid
             if fid not in seen:
                 seen.add(fid)
                 rows.append({
@@ -77,13 +100,13 @@ def _rows_from_urls(urls: list[str]) -> list[dict]:
                 })
             continue
 
-        # Pattern 2: /golf-courses/state/city/slug-id  or  /golf-courses/state/city/slug
-        m2 = re.search(r"/golf-courses/[a-z]{2}/[^/]+/([^/?#]+)", loc)
+        # Pattern: /golf-courses/{state}/{city}/{slug}  (deepest level)
+        m2 = re.search(r"/golf-courses/[a-z-]+/[a-z-]+/([^/?#]+)", loc)
         if m2:
             slug = m2.group(1)
             id_m = re.search(r"-(\d+)$", slug)
-            fid  = id_m.group(1) if id_m else re.sub(r"[^a-z0-9]", "", slug)
-            if fid not in seen:
+            fid  = id_m.group(1) if id_m else None
+            if fid and fid not in seen:
                 seen.add(fid)
                 rows.append({
                     "Course Name":          _slug_to_name(slug),
@@ -101,40 +124,26 @@ def _rows_from_urls(urls: list[str]) -> list[dict]:
 def run(states: list[str] | None = None) -> int:
     db = get_db()
 
-    print("[scrape_golfnow] Fetching sitemap…")
-    root = _fetch_xml(SITEMAP_ROOT)
-    if root is None:
-        print("[scrape_golfnow] ERROR: Could not fetch sitemap.")
-        return 0
+    # Only walk the course directory branch — skip destinations/spotlight/static
+    print("[scrape_golfnow] Fetching course directory sitemap tree…")
+    course_dir_urls = _collect_all_urls(
+        "https://www.golfnow.com/sitemap_coursedirectory.xml",
+        max_depth=4
+    )
 
-    tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
+    print(f"[scrape_golfnow] {len(course_dir_urls)} total URLs collected")
+    if course_dir_urls:
+        print(f"  Sample: {course_dir_urls[:5]}")
 
-    all_urls: list[str] = []
-
-    if tag == "sitemapindex":
-        child_urls = _all_urls_from_sitemap(root)
-        print(f"[scrape_golfnow] Sitemap index with {len(child_urls)} children")
-        for i, sm_url in enumerate(child_urls, 1):
-            print(f"  [golfnow] {i}/{len(child_urls)}: {sm_url}")
-            child = _fetch_xml(sm_url)
-            if child:
-                urls = _all_urls_from_sitemap(child)
-                # Debug: show first 3 URLs from each sitemap
-                if urls:
-                    print(f"    Sample URLs: {urls[:3]}")
-                all_urls.extend(urls)
-            time.sleep(0.3)
-    else:
-        all_urls = _all_urls_from_sitemap(root)
-        print(f"[scrape_golfnow] Direct sitemap with {len(all_urls)} URLs")
-        if all_urls:
-            print(f"  Sample URLs: {all_urls[:5]}")
-
-    rows = _rows_from_urls(all_urls)
-    print(f"[scrape_golfnow] {len(rows)} facilities matched")
+    rows = _rows_from_urls(course_dir_urls)
+    print(f"[scrape_golfnow] {len(rows)} unique facilities matched")
 
     if rows:
-        upsert_courses(db, rows, "golfnow")
+        # Upsert in batches
+        batch_size = 500
+        for i in range(0, len(rows), batch_size):
+            upsert_courses(db, rows[i:i + batch_size], "golfnow")
+            print(f"  [golfnow] Upserted {min(i + batch_size, len(rows))}/{len(rows)}")
 
     print(f"[scrape_golfnow] Done — {len(rows)} GolfNow facilities upserted.")
     return len(rows)
