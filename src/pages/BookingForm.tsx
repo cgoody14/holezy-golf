@@ -279,29 +279,6 @@ const BookingForm = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Time range */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Preferred tee-time window</Label>
-              <Slider
-                value={[earliestTime, latestTime]}
-                onValueChange={(vals) => {
-                  setEarliestTime(vals[0]);
-                  setLatestTime(vals[1]);
-                  update('earliestTime', minutesToTimeString(vals[0]));
-                  update('latestTime',   minutesToTimeString(vals[1]));
-                }}
-                min={360}
-                max={1260}
-                step={30}
-                minStepsBetweenThumbs={1}
-              />
-              <div className="flex justify-between text-sm font-medium">
-                <span>{minutesToTimeString(earliestTime)}</span>
-                <span className="text-xs text-muted-foreground">6 AM – 9 PM</span>
-                <span>{minutesToTimeString(latestTime)}</span>
-              </div>
-            </div>
-
             {/* Players */}
             <div className="space-y-3">
               <Label className="flex items-center gap-2 text-sm font-medium">
@@ -324,6 +301,29 @@ const BookingForm = () => {
                     {n}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Time range */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Preferred tee-time window</Label>
+              <Slider
+                value={[earliestTime, latestTime]}
+                onValueChange={(vals) => {
+                  setEarliestTime(vals[0]);
+                  setLatestTime(vals[1]);
+                  update('earliestTime', minutesToTimeString(vals[0]));
+                  update('latestTime',   minutesToTimeString(vals[1]));
+                }}
+                min={360}
+                max={1260}
+                step={30}
+                minStepsBetweenThumbs={1}
+              />
+              <div className="flex justify-between text-sm font-medium">
+                <span>{minutesToTimeString(earliestTime)}</span>
+                <span className="text-xs text-muted-foreground">6 AM – 9 PM</span>
+                <span>{minutesToTimeString(latestTime)}</span>
               </div>
             </div>
           </CardContent>
