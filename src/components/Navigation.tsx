@@ -5,12 +5,10 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import holezyLogo from '@/assets/holezy-logo.png';
-import StateSelectionDialog from '@/components/StateSelectionDialog';
 
 const Navigation = () => {
   const [user, setUser] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showStateDialog, setShowStateDialog] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -89,16 +87,16 @@ const handleSignOut = async () => {
             >
               Courses
             </Link>
-            <button
-              onClick={() => setShowStateDialog(true)}
+            <Link
+              to="/book"
               className={`font-medium transition-colors ${
-                isActive('/book') 
-                  ? 'text-primary border-b-2 border-primary pb-1' 
+                isActive('/book')
+                  ? 'text-primary border-b-2 border-primary pb-1'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Book a Tee Time
-            </button>
+            </Link>
             <Link
               to="/blog"
               className={`font-medium transition-colors ${
@@ -190,17 +188,15 @@ const handleSignOut = async () => {
             >
               Courses
             </Link>
-            <button
-              onClick={() => {
-                setIsMenuOpen(false);
-                setShowStateDialog(true);
-              }}
-              className={`block font-medium transition-colors text-left ${
+            <Link
+              to="/book"
+              className={`block font-medium transition-colors ${
                 isActive('/book') ? 'text-primary' : 'text-muted-foreground'
               }`}
+              onClick={() => setIsMenuOpen(false)}
             >
               Book a Tee Time
-            </button>
+            </Link>
             <Link
               to="/blog"
               className={`block font-medium transition-colors ${
@@ -268,10 +264,6 @@ const handleSignOut = async () => {
         )}
       </div>
 
-      <StateSelectionDialog 
-        isOpen={showStateDialog} 
-        onClose={() => setShowStateDialog(false)} 
-      />
     </nav>
   );
 };

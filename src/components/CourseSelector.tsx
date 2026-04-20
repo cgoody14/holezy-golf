@@ -11,6 +11,9 @@ interface Course {
   "Course Name": string;
   "Address"?: string;
   "Facility ID"?: number;
+  booking_platform?: string;
+  platform_course_id?: string;
+  platform_booking_url?: string;
 }
 
 interface CustomCourse {
@@ -40,210 +43,155 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
 
   const pageSize = 50;
 
-  // Filtered courses based on search term
   const filteredCourses = useMemo(() => {
     if (!searchTerm.trim()) {
-      const defaultCourses = courses.slice(0, Math.min(15, courses.length));
-      return [...defaultCourses, { "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
+      return courses.slice(0, Math.min(15, courses.length));
     }
-    
-    // If user types "Other", only show the custom course option
-    if (searchTerm.toLowerCase().trim() === 'other') {
-      return [{ "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
-    }
-    
-    const filtered = courses.filter(course =>
+    return courses.filter(course =>
       course["Course Name"]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course["Address"]?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    
-    // Only add "Other" option if it's not already there (to avoid duplicates when searching "other")
-    const hasOtherOption = filtered.some(course => course["Course Name"] === 'Other');
-    if (!hasOtherOption) {
-      return [...filtered, { "Course Name": 'Other', "Address": 'Type in your course if not found above' }];
-    }
-    
-    return filtered;
   }, [courses, searchTerm]);
 
-  // Load recent searches from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('golfCourseSearches');
     if (saved) {
-      try {
-        setRecentSearches(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error loading recent searches:', e);
-      }
+      try { setRecentSearches(JSON.parse(saved)); } catch { /* ignore */ }
     }
   }, []);
 
   const loadCourses = useCallback(async (pageNum: number = 0, reset: boolean = false, searchQuery?: string) => {
-    if (searchQuery) {
-      setIsSearching(true);
-    } else {
-      setIsLoading(true);
-    }
-    
+    if (searchQuery) { setIsSearching(true); } else { setIsLoading(true); }
+
     try {
       const from = pageNum * pageSize;
-      const to = from + pageSize - 1;
-      
+      const to   = from + pageSize - 1;
+
       let query = supabase
         .from('Course_Database')
-        .select('"Course Name", "Address", "Facility ID"')
+        .select('"Course Name", "Address", "Facility ID", booking_platform, platform_course_id, platform_booking_url')
         .not('"Course Name"', 'is', null);
-      
-      // Filter by state if provided
+
       if (stateFilter) {
-        // Match state abbreviation in address (e.g., ", CA" or ", CA ")
         query = query.or(
           `"Address".ilike.%, ${stateFilter}%,"Address".ilike.%, ${stateFilter} %,"Address".ilike.%${stateFilter},%`
         );
       }
-      
-      // Enhanced search - search in both course name and address
+
       if (searchQuery && searchQuery.trim()) {
         query = query.or(
           `"Course Name".ilike.%${searchQuery.trim()}%,"Address".ilike.%${searchQuery.trim()}%`
         );
       }
-      
-      const { data, error } = await query
-        .order('"Course Name"')
-        .range(from, to);
 
+      const { data, error } = await query.order('"Course Name"').range(from, to);
       if (error) throw error;
 
-      if (reset) {
-        setCourses(data || []);
-      } else {
-        setCourses(prev => [...prev, ...(data || [])]);
-      }
-      
+      if (reset) { setCourses(data || []); } else { setCourses(prev => [...prev, ...(data || [])]); }
       setHasMore((data || []).length === pageSize);
       setPage(pageNum);
     } catch (error) {
       console.error('Error loading courses:', error);
-      toast({
-        title: "Error loading courses",
-        description: "Please try again later",
-        variant: "destructive"
-      });
+      toast({ title: "Error loading courses", description: "Please try again later", variant: "destructive" });
     } finally {
       setIsLoading(false);
       setIsSearching(false);
     }
-  }, [toast]);
+  }, [toast, stateFilter]);
 
-  useEffect(() => {
-    loadCourses(0, true);
-  }, [stateFilter]);
+  useEffect(() => { loadCourses(0, true); }, [stateFilter]);
 
-  const handleCourseSelect = (courseName: string) => {
-    if (courseName === 'Other') {
-      setShowCustomInput(true);
-      setSearchTerm('');
-    } else {
-      onCourseSelect(courseName);
-      setSearchTerm(courseName);
-      setShowCustomInput(false);
-      
-      // Save to recent searches
-      const updated = [courseName, ...recentSearches.filter(s => s !== courseName)].slice(0, 5);
-      setRecentSearches(updated);
-      localStorage.setItem('golfCourseSearches', JSON.stringify(updated));
+  const handleCourseSelect = (courseName: string, course?: Course) => {
+    onCourseSelect(courseName);
+    setSearchTerm(courseName);
+    setShowCustomInput(false);
+
+    if (course) {
+      sessionStorage.setItem('selectedCourse', JSON.stringify({
+        name:               course["Course Name"],
+        facilityId:         course["Facility ID"],
+        bookingPlatform:    course.booking_platform || 'chronogolf',
+        platformCourseId:   course.platform_course_id || String(course["Facility ID"] || ''),
+        platformBookingUrl: course.platform_booking_url || '',
+      }));
     }
+
+    const updated = [courseName, ...recentSearches.filter(s => s !== courseName)].slice(0, 5);
+    setRecentSearches(updated);
+    localStorage.setItem('golfCourseSearches', JSON.stringify(updated));
+    setIsOpen(false);
+  };
+
+  const openCustomForm = () => {
+    setCustomCourse({ "Course Name": searchTerm, city: '', state: '' });
+    setShowCustomInput(true);
     setIsOpen(false);
   };
 
   const handleCustomCourseSubmit = async () => {
-    // Validate all required fields
-    if (!customCourse["Course Name"] || !customCourse.city || !customCourse.state) {
-      return;
-    }
+    if (!customCourse["Course Name"].trim() || !customCourse.city.trim() || !customCourse.state.trim()) return;
 
     try {
-        // Find the highest facility_id starting from a large number for user-added courses
-        const { data: existingCourses, error: fetchError } = await supabase
-          .from('Course_Database')
-          .select('"Facility ID"')
-          .gte('"Facility ID"', 900000) // Start user-added courses from 900000
-          .order('"Facility ID"', { ascending: false })
-          .limit(1);
+      const { data: existingCourses, error: fetchError } = await supabase
+        .from('Course_Database')
+        .select('"Facility ID"')
+        .gte('"Facility ID"', 900000)
+        .order('"Facility ID"', { ascending: false })
+        .limit(1);
 
-        if (fetchError) throw fetchError;
+      if (fetchError) throw fetchError;
 
-        let nextId = 900001; // Start from Other1 equivalent
-        if (existingCourses && existingCourses.length > 0) {
-          nextId = (existingCourses[0]["Facility ID"] || 900000) + 1;
-        }
-
-        const customCourseName = `${customCourse["Course Name"]} (${customCourse.city}, ${customCourse.state})`;
-        
-        // Save to Course_Database
-        const { error: insertError } = await supabase
-          .from('Course_Database')
-          .insert({
-            "Facility ID": nextId,
-            "Course Name": customCourseName,
-            "Address": `${customCourse.city}, ${customCourse.state}`,
-            "Source": 'user_added'
-          });
-
-        if (insertError) throw insertError;
-
-        // Send admin notification
-        try {
-          await supabase.functions.invoke('send-admin-alert', {
-            body: {
-              type: 'course_added',
-              courseDetails: {
-                name: customCourse["Course Name"],
-                city: customCourse.city,
-                state: customCourse.state,
-                facilityId: nextId
-              }
-            }
-          });
-        } catch (alertError) {
-          console.error('Error sending admin alert:', alertError);
-          // Don't block the user flow if notification fails
-        }
-
-
-        onCourseSelect(customCourseName);
-        setSearchTerm(customCourseName);
-        setShowCustomInput(false);
-        setCustomCourse({ "Course Name": '', city: '', state: '' });
-        
-        // Reload courses to include the new one
-        loadCourses(0, true);
-      } catch (error) {
-        console.error('Error saving custom course:', error);
+      let nextId = 900001;
+      if (existingCourses && existingCourses.length > 0) {
+        nextId = (existingCourses[0]["Facility ID"] || 900000) + 1;
       }
+
+      const locationSuffix = customCourse.city
+        ? ` (${customCourse.city}${customCourse.state ? ', ' + customCourse.state : ''})`
+        : '';
+      const customCourseName = `${customCourse["Course Name"].trim()}${locationSuffix}`;
+
+      const { error: insertError } = await supabase
+        .from('Course_Database')
+        .insert({
+          "Facility ID": nextId,
+          "Course Name": customCourseName,
+          "Address": customCourse.city
+            ? `${customCourse.city}${customCourse.state ? ', ' + customCourse.state : ''}`
+            : null,
+          "Source": 'user_added'
+        });
+
+      if (insertError) throw insertError;
+
+      try {
+        await supabase.functions.invoke('send-admin-alert', {
+          body: { type: 'course_added', courseDetails: { name: customCourse["Course Name"], city: customCourse.city, state: customCourse.state, facilityId: nextId } }
+        });
+      } catch { /* non-fatal */ }
+
+      onCourseSelect(customCourseName);
+      setSearchTerm(customCourseName);
+      setShowCustomInput(false);
+      setCustomCourse({ "Course Name": '', city: '', state: '' });
+      loadCourses(0, true);
+    } catch (error) {
+      console.error('Error saving custom course:', error);
+      toast({ title: "Error adding course", description: "Please try again", variant: "destructive" });
+    }
   };
 
   const handleLoadMore = () => {
-    if (!isLoading && hasMore) {
-      loadCourses(page + 1, false, searchTerm);
-    }
+    if (!isLoading && hasMore) loadCourses(page + 1, false, searchTerm);
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
-    
-    // Reset pagination and load courses with search
     setPage(0);
     setHasMore(true);
     loadCourses(0, true, value);
-    
-    // Clear selection if search is cleared
-    if (!value.trim() && selectedCourse) {
-      onCourseSelect('');
-    }
-    
+    if (!value.trim() && selectedCourse) onCourseSelect('');
     setShowCustomInput(false);
   };
 
@@ -256,108 +204,73 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
 
   return (
     <div className="relative">
-      {!showCustomInput ? (
-        <div className="relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search golf courses by name or location..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            onFocus={() => setIsOpen(true)}
-            className="pl-10 pr-20"
-          />
-          <div className="absolute right-1 top-1 flex items-center space-x-1">
-            {selectedCourse && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={clearSelection}
-                title="Clear selection"
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => setIsOpen(!isOpen)}
-            >
-              <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search golf courses by name or location..."
+          value={searchTerm}
+          onChange={handleSearchChange}
+          onFocus={() => { setIsOpen(true); setShowCustomInput(false); }}
+          className="pl-10 pr-20"
+        />
+        <div className="absolute right-1 top-1 flex items-center space-x-1">
+          {selectedCourse && (
+            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={clearSelection} title="Clear selection">
+              <X className="h-3 w-3" />
             </Button>
-          </div>
-          
-          {selectedCourse && !isOpen && (
-            <div className="mt-2">
-              <Badge variant="secondary" className="flex items-center space-x-1 w-fit">
-                <MapPin className="h-3 w-3" />
-                <span className="truncate">{selectedCourse}</span>
-              </Badge>
-            </div>
           )}
+          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setIsOpen(!isOpen)}>
+            <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </Button>
         </div>
-      ) : (
-        <Card className="p-4 space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Enter your golf course details:</div>
-          <div className="space-y-2">
-            <Input
-              placeholder="Golf course name *"
-              value={customCourse["Course Name"]}
-              onChange={(e) => setCustomCourse(prev => ({ ...prev, "Course Name": e.target.value }))}
-              required
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                placeholder="City *"
-                value={customCourse.city}
-                onChange={(e) => setCustomCourse(prev => ({ ...prev, city: e.target.value }))}
-                required
-              />
-              <Input
-                placeholder="State *"
-                value={customCourse.state}
-                onChange={(e) => setCustomCourse(prev => ({ ...prev, state: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          <div className="flex space-x-2">
-            <Button onClick={handleCustomCourseSubmit} size="sm" className="flex-1">
-              Add Course
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                setShowCustomInput(false);
-                setCustomCourse({ "Course Name": '', city: '', state: '' });
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </Card>
-      )}
 
+        {selectedCourse && !isOpen && (
+          <div className="mt-2">
+            <Badge variant="secondary" className="flex items-center space-x-1 w-fit">
+              <MapPin className="h-3 w-3" />
+              <span className="truncate">{selectedCourse}</span>
+            </Badge>
+          </div>
+        )}
+      </div>
+
+      {/* Dropdown */}
       {isOpen && !showCustomInput && (
         <Card className="absolute top-full left-0 right-0 mt-1 z-50 max-h-[85vh] overflow-hidden bg-background shadow-lg border">
           <CardContent className="p-0">
             <div className="max-h-[85vh] overflow-y-auto">
-              {/* Search status and tips */}
+
+              {/* Pinned "Add your course" row — always at the top when searching */}
+              {searchTerm.trim() && (
+                <button
+                  type="button"
+                  className="w-full text-left p-3 bg-green-50 border-b-2 border-green-200 hover:bg-green-100 transition-colors focus:outline-none"
+                  onClick={openCustomForm}
+                >
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-green-700 shrink-0" />
+                    <div>
+                      <span className="font-medium text-green-800">Can't find it? Add </span>
+                      <span className="font-semibold text-green-900">"{searchTerm}"</span>
+                      <span className="font-medium text-green-800"> as your course</span>
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {/* Search status */}
               <div className="p-3 text-xs text-muted-foreground bg-muted/30 border-b">
                 {isSearching ? (
                   <div className="flex items-center space-x-2">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     <span>Searching courses...</span>
                   </div>
-) : searchTerm ? (
-                  `${filteredCourses.length - 1} courses found`
+                ) : searchTerm ? (
+                  `${filteredCourses.length} course${filteredCourses.length === 1 ? '' : 's'} found`
                 ) : (
-                  "Can't find your course? Select \"Add Custom Course\" to add it manually."
+                  "Start typing to search, or scroll to browse all courses"
                 )}
               </div>
 
@@ -366,24 +279,13 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                 <div className="p-3 border-b bg-muted/10">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-xs font-medium text-muted-foreground">Recent Searches</div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 text-xs text-muted-foreground hover:text-destructive px-1"
-                      onClick={() => setRecentSearches([])}
-                    >
+                    <Button variant="ghost" size="sm" className="h-5 text-xs text-muted-foreground hover:text-destructive px-1" onClick={() => setRecentSearches([])}>
                       Clear
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {recentSearches.map((recent, index) => (
-                      <Button
-                        key={index}
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-xs px-2"
-                        onClick={() => handleCourseSelect(recent)}
-                      >
+                      <Button key={index} variant="outline" size="sm" className="h-6 text-xs px-2" onClick={() => handleCourseSelect(recent)}>
                         {recent}
                       </Button>
                     ))}
@@ -399,38 +301,11 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                     <span>Loading courses...</span>
                   </div>
                 </div>
-              ) : filteredCourses.length === 1 && filteredCourses[0]["Course Name"] === 'Other' ? (
-                <div>
-                  <div className="p-6 text-center text-muted-foreground">
-                    <div className="mb-3">
-                      <Search className="h-8 w-8 mx-auto text-muted-foreground/50" />
-                    </div>
-                    <div className="text-sm">
-                      {searchTerm ? 'No courses found matching your search' : 'No courses available'}
-                    </div>
-                    <div className="text-xs text-muted-foreground/70 mt-1">
-                      Try a different search term or add your course manually
-                    </div>
-                  </div>
-                  <div className="divide-y">
-                    <button
-                      type="button"
-                      className="w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none bg-primary/5 border-t-2 border-primary/20"
-                      onClick={() => handleCourseSelect('Other')}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium flex items-center space-x-2">
-                            <Plus className="h-4 w-4 text-primary" />
-                            <span className="text-primary">Add Custom Course</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1 truncate">
-                            Type in your course if not found above
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
+              ) : filteredCourses.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Search className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
+                  <div className="text-sm font-medium">No courses found</div>
+                  <div className="text-xs text-muted-foreground/70 mt-1 mb-4">Use the button above to add your course</div>
                 </div>
               ) : (
                 <div className="divide-y">
@@ -438,36 +313,28 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                     <button
                       key={`${course["Facility ID"]}-${index}`}
                       type="button"
-                      className={`w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none ${
-                        course["Course Name"] === 'Other' ? 'bg-primary/5 border-t-2 border-primary/20' : ''
-                      }`}
-                      onClick={() => handleCourseSelect(course["Course Name"])}
+                      className="w-full text-left p-3 hover:bg-muted/50 transition-colors focus:bg-muted/50 focus:outline-none"
+                      onClick={() => handleCourseSelect(course["Course Name"], course)}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="font-medium flex items-center space-x-2">
-                            {course["Course Name"] === 'Other' ? (
-                              <>
-                                <Plus className="h-4 w-4 text-primary" />
-                                <span className="text-primary">Add Custom Course</span>
-                              </>
-                            ) : (
-                              <>
-                                <MapPin className="h-3 w-3 text-muted-foreground" />
-                                <span className="truncate">{course["Course Name"]}</span>
-                              </>
+                            <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <span className="truncate">{course["Course Name"]}</span>
+                            {course.booking_platform && course.booking_platform !== 'chronogolf' && (
+                              <span className="ml-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                                {course.booking_platform}
+                              </span>
                             )}
                           </div>
                           {course["Address"] && (
-                            <div className="text-sm text-muted-foreground mt-1 truncate">
-                              {course["Address"]}
-                            </div>
+                            <div className="text-sm text-muted-foreground mt-1 truncate">{course["Address"]}</div>
                           )}
                         </div>
                       </div>
                     </button>
                   ))}
-                  
+
                   {hasMore && searchTerm && (
                     <button
                       type="button"
@@ -480,24 +347,94 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
                           <Loader2 className="h-3 w-3 animate-spin" />
                           <span>Loading more...</span>
                         </div>
-                      ) : (
-                        'Load more courses'
-                      )}
+                      ) : 'Load more courses'}
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Bottom "Add course" prompt when browsing (no search term) */}
+              {!searchTerm && (
+                <button
+                  type="button"
+                  className="w-full text-left p-3 bg-muted/20 border-t hover:bg-muted/40 transition-colors focus:outline-none"
+                  onClick={openCustomForm}
+                >
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Plus className="h-4 w-4 shrink-0" />
+                    <span className="text-sm">Can't find your course? Add it manually</span>
+                  </div>
+                </button>
               )}
             </div>
           </CardContent>
         </Card>
       )}
-      
-      {/* Overlay to close dropdown when clicking outside */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setIsOpen(false)}
-        />
+
+      {/* Overlay to close dropdown */}
+      {isOpen && !showCustomInput && (
+        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+      )}
+
+      {/* Persistent "Can't find it?" link below search when no course is selected */}
+      {!selectedCourse && !isOpen && !showCustomInput && (
+        <button
+          type="button"
+          className="mt-2 flex items-center gap-1 text-xs text-green-700 hover:text-green-900 hover:underline transition-colors"
+          onClick={openCustomForm}
+        >
+          <Plus className="h-3 w-3" />
+          Can't find your course? Add it here
+        </button>
+      )}
+
+      {/* Inline custom course form */}
+      {showCustomInput && (
+        <Card className="mt-2 border-green-200 shadow-sm">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-green-700" />
+              <span className="text-sm font-semibold text-green-800">Add Your Course</span>
+            </div>
+            <div className="space-y-2">
+              <Input
+                placeholder="Golf course name *"
+                value={customCourse["Course Name"]}
+                onChange={(e) => setCustomCourse(prev => ({ ...prev, "Course Name": e.target.value }))}
+                autoFocus
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="City *"
+                  value={customCourse.city}
+                  onChange={(e) => setCustomCourse(prev => ({ ...prev, city: e.target.value }))}
+                />
+                <Input
+                  placeholder="State *"
+                  value={customCourse.state}
+                  onChange={(e) => setCustomCourse(prev => ({ ...prev, state: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleCustomCourseSubmit}
+                size="sm"
+                className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+                disabled={!customCourse["Course Name"].trim() || !customCourse.city.trim() || !customCourse.state.trim()}
+              >
+                Add Course
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setShowCustomInput(false); setCustomCourse({ "Course Name": '', city: '', state: '' }); }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

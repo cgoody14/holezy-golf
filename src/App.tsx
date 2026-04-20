@@ -24,6 +24,8 @@ const FAQ = lazy(() => import("./components/FAQ"));
 const Courses = lazy(() => import("./pages/Courses"));
 const StateCourses = lazy(() => import("./pages/StateCourses"));
 const CityCourses = lazy(() => import("./pages/CityCourses"));
+const BookingStatus = lazy(() => import("./pages/BookingStatus"));
+const AdminJobs = lazy(() => import("./pages/AdminJobs"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -71,6 +73,8 @@ const App = () => (
                 <Route path="/courses" element={<Courses />} />
                 <Route path="/golf-courses/:stateSlug" element={<StateCourses />} />
                 <Route path="/golf-courses/:stateSlug/:citySlug" element={<CityCourses />} />
+                <Route path="/booking-status/:jobId" element={<BookingStatus />} />
+                <Route path="/admin/jobs" element={<AdminJobs />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

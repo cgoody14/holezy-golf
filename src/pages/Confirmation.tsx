@@ -17,6 +17,7 @@ interface ConfirmationData {
   preferredCourse: string;
   totalPrice: number;
   promoCode?: string;
+  scheduledJobId?: string | null;
   paymentMethod: {
     last4: string;
     cardType: string;
@@ -262,15 +263,27 @@ const Confirmation = () => {
 
         {/* Action Buttons */}
         <div className="text-center space-y-4">
-          <Link to="/book">
-            <Button size="lg" className="text-lg px-8 py-6">
-              Book Another Tee Time
-            </Button>
-          </Link>
-          
+          {confirmationData.scheduledJobId && (
+            <div>
+              <Link to={`/booking-status/${confirmationData.scheduledJobId}`}>
+                <Button size="lg" className="text-lg px-8 py-6 w-full sm:w-auto">
+                  Track Booking Status
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          <div>
+            <Link to="/book">
+              <Button variant="outline" size="lg" className="text-lg px-8 py-6">
+                Book Another Tee Time
+              </Button>
+            </Link>
+          </div>
+
           <div>
             <Link to="/">
-              <Button variant="outline" size="lg" className="text-lg px-8 py-6">
+              <Button variant="ghost" size="lg" className="text-lg px-8 py-6">
                 Return to Home
               </Button>
             </Link>

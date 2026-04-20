@@ -1,0 +1,6 @@
+playwright
+supabase
+python-dotenv
+sentry-sdk
+resend
+requests

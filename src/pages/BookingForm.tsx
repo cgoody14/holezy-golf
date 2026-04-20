@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { CalendarIcon, Clock, Users, MapPin, Phone, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Clock, Users, MapPin, Phone, Mail, User, Pencil } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Calendar } from '@/components/ui/calendar';
+import { Slider } from '@/components/ui/slider';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import AuthDialog from '@/components/AuthDialog';
-import StateSelectionDialog from '@/components/StateSelectionDialog';
-import { format } from 'date-fns';
+import CourseSelector from '@/components/CourseSelector';
 
 export interface BookingData {
   firstName: string;
@@ -23,31 +26,24 @@ export interface BookingData {
   preferredCourse: string;
 }
 
-interface StoredBookingDetails {
-  players: number;
-  date: string;
-  earliestTime: number;
-  latestTime: number;
-  earliestTimeStr: string;
-  latestTimeStr: string;
-}
+const minutesToTimeString = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
+};
 
 const BookingForm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [showAuthDialog, setShowAuthDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [user, setUser] = useState(null);
-  const [storedDetails, setStoredDetails] = useState<StoredBookingDetails | null>(null);
-  const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
-  const [bookingSummary, setBookingSummary] = useState<{
-    course: string;
-    date: string;
-    players: number;
-    earliestTime: string;
-    latestTime: string;
-  } | null>(null);
-  
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [earliestTime, setEarliestTime] = useState(360);  // 6:00 AM
+  const [latestTime, setLatestTime] = useState(1260);     // 9:00 PM
+
   const [formData, setFormData] = useState<BookingData>({
     firstName: '',
     lastName: '',
@@ -57,276 +53,303 @@ const BookingForm = () => {
     earliestTime: '',
     latestTime: '',
     numberOfPlayers: 1,
-    preferredCourse: ''
+    preferredCourse: '',
   });
 
   useEffect(() => {
     checkAuth();
-    loadBookingDetails();
-  }, []);
-
-  const loadBookingDetails = () => {
+    // Restore any previously saved selections from sessionStorage
     const storedCourse = sessionStorage.getItem('selectedCourse');
-    const storedDetailsStr = sessionStorage.getItem('bookingDetails');
-    const storedState = sessionStorage.getItem('selectedState');
-    
-    if (storedState) {
-      setSelectedStateCode(storedState);
-    }
-    
-    if (storedCourse && storedDetailsStr) {
+    const storedDetails = sessionStorage.getItem('bookingDetails');
+    if (storedCourse && storedDetails) {
       try {
-        const details: StoredBookingDetails = JSON.parse(storedDetailsStr);
-        const dateObj = new Date(details.date);
-        
-        setStoredDetails(details);
-        
-        setBookingSummary({
-          course: storedCourse,
-          date: format(dateObj, 'PPP'),
-          players: details.players,
-          earliestTime: details.earliestTimeStr,
-          latestTime: details.latestTimeStr,
-        });
-        
-        // Pre-fill form data with booking details
+        const d = JSON.parse(storedDetails);
+        if (d.date) setSelectedDate(new Date(d.date));
+        if (d.earliestTime) setEarliestTime(d.earliestTime);
+        if (d.latestTime) setLatestTime(d.latestTime);
+        const courseName = typeof storedCourse === 'string' && storedCourse.startsWith('{')
+          ? JSON.parse(storedCourse).name
+          : storedCourse;
         setFormData(prev => ({
           ...prev,
-          date: dateObj.toISOString().split('T')[0],
-          earliestTime: details.earliestTimeStr,
-          latestTime: details.latestTimeStr,
-          numberOfPlayers: details.players,
-          preferredCourse: storedCourse,
+          preferredCourse: courseName || '',
+          numberOfPlayers: d.players || 1,
+          date: d.date ? new Date(d.date).toISOString().split('T')[0] : '',
+          earliestTime: d.earliestTimeStr || minutesToTimeString(d.earliestTime || 360),
+          latestTime:   d.latestTimeStr   || minutesToTimeString(d.latestTime   || 1260),
         }));
-      } catch (error) {
-        console.error('Error parsing booking details:', error);
-      }
+      } catch { /* ignore */ }
     }
-  };
+  }, []);
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     setUser(session?.user || null);
-    
-    // Auto-populate form with user data if logged in
-    if (session?.user) {
-      await populateUserData(session.user);
+    if (session?.user) await populateUserData(session.user);
+  };
+
+  const populateUserData = async (authUser: any) => {
+    try {
+      const { data: account, error } = await supabase
+        .from('Client_Accounts')
+        .select('first_name, last_name, email, phone')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+
+      if (account && !error) {
+        setFormData(prev => ({
+          ...prev,
+          firstName: account.first_name || '',
+          lastName:  account.last_name  || '',
+          email:     account.email      || authUser.email || '',
+          phone:     account.phone      || '',
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          email:     authUser.email                        || '',
+          firstName: authUser.user_metadata?.first_name   || '',
+          lastName:  authUser.user_metadata?.last_name    || '',
+          phone:     authUser.user_metadata?.phone        || '',
+        }));
+      }
+    } catch {
+      setFormData(prev => ({
+        ...prev,
+        email:     authUser.email                        || '',
+        firstName: authUser.user_metadata?.first_name   || '',
+        lastName:  authUser.user_metadata?.last_name    || '',
+        phone:     authUser.user_metadata?.phone        || '',
+      }));
     }
   };
 
-  const populateUserData = async (user: any) => {
-    try {
-      // First try to get data from Client_Accounts table
-      const { data: clientAccount, error } = await supabase
-        .from('Client_Accounts')
-        .select('first_name, last_name, email, phone')
-        .eq('user_id', user.id)
-        .maybeSingle();
+  const update = (field: keyof BookingData, value: string | number) =>
+    setFormData(prev => ({ ...prev, [field]: value }));
 
-      if (clientAccount && !error) {
-        setFormData(prev => ({
-          ...prev,
-          firstName: clientAccount.first_name || '',
-          lastName: clientAccount.last_name || '',
-          email: clientAccount.email || user.email || '',
-          phone: clientAccount.phone || ''
-        }));
-      } else {
-        // Fallback to auth user data
-        setFormData(prev => ({
-          ...prev,
-          email: user.email || '',
-          firstName: user.user_metadata?.first_name || '',
-          lastName: user.user_metadata?.last_name || '',
-          phone: user.user_metadata?.phone || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      // Fallback to auth user data
-      setFormData(prev => ({
-        ...prev,
-        email: user.email || '',
-        firstName: user.user_metadata?.first_name || '',
-        lastName: user.user_metadata?.last_name || '',
-        phone: user.user_metadata?.phone || ''
-      }));
-    }
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+    setShowCalendar(false);
+    if (date) update('date', date.toISOString().split('T')[0]);
+  };
+
+  const handleEarliestChange = (vals: number[]) => {
+    const v = vals[0];
+    setEarliestTime(v);
+    setLatestTime(prev => Math.max(prev, v + 30));
+    update('earliestTime', minutesToTimeString(v));
+  };
+
+  const handleLatestChange = (vals: number[]) => {
+    const v = vals[0];
+    setLatestTime(v);
+    setEarliestTime(prev => Math.min(prev, v - 30));
+    update('latestTime', minutesToTimeString(v));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
+    if (!formData.preferredCourse.trim()) {
+      toast({ title: "Missing Information", description: "Please select a golf course", variant: "destructive" });
+      return;
+    }
+    if (!formData.date) {
+      toast({ title: "Missing Information", description: "Please select a date", variant: "destructive" });
+      return;
+    }
     if (!formData.firstName.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter your first name",
-        variant: "destructive"
-      });
+      toast({ title: "Missing Information", description: "Please enter your first name", variant: "destructive" });
       return;
     }
-
     if (!formData.lastName.trim()) {
-      toast({
-        title: "Missing Information", 
-        description: "Please enter your last name",
-        variant: "destructive"
-      });
+      toast({ title: "Missing Information", description: "Please enter your last name", variant: "destructive" });
       return;
     }
-
     if (!formData.email.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter your email address",
-        variant: "destructive"
-      });
+      toast({ title: "Missing Information", description: "Please enter your email address", variant: "destructive" });
       return;
     }
-
     if (!formData.phone.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter your phone number",
-        variant: "destructive"
-      });
+      toast({ title: "Missing Information", description: "Please enter your phone number", variant: "destructive" });
       return;
     }
 
-    // Check if user is authenticated
+    // Save full booking details so Checkout can read them
+    const payload = {
+      ...formData,
+      earliestTime: minutesToTimeString(earliestTime),
+      latestTime:   minutesToTimeString(latestTime),
+    };
+    sessionStorage.setItem('bookingData', JSON.stringify(payload));
+    sessionStorage.setItem('bookingDetails', JSON.stringify({
+      players:         formData.numberOfPlayers,
+      date:            selectedDate?.toISOString(),
+      earliestTime,
+      latestTime,
+      earliestTimeStr: minutesToTimeString(earliestTime),
+      latestTimeStr:   minutesToTimeString(latestTime),
+    }));
+
     if (!user) {
-      // Store form data temporarily and show auth dialog
-      sessionStorage.setItem('bookingData', JSON.stringify(formData));
       setShowAuthDialog(true);
       return;
     }
-
-    // Store form data and navigate to checkout
-    sessionStorage.setItem('bookingData', JSON.stringify(formData));
     navigate('/checkout');
   };
 
-  const updateFormData = (field: keyof BookingData, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const US_STATES: Record<string, string> = {
-    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
-    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
-    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
-    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
-    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
-    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
-    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
-    'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
-  };
-
-  const getStateFromCode = (code: string) => ({
-    code,
-    name: US_STATES[code] || code
-  });
+  const canSubmit =
+    formData.preferredCourse.trim() &&
+    formData.date &&
+    formData.firstName.trim() &&
+    formData.lastName.trim() &&
+    formData.email.trim() &&
+    formData.phone.trim();
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">Book Your Tee Time</h1>
-          <p className="text-lg text-muted-foreground">
-            Complete your contact information below
-          </p>
+      <div className="max-w-2xl mx-auto space-y-6">
+
+        <div className="text-center">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">Book Your Tee Time</h1>
+          <p className="text-muted-foreground">Fill in the details below and we'll secure your spot.</p>
         </div>
 
-        {/* Booking Summary */}
-        {bookingSummary && (
-          <Card className="mb-6 bg-primary/5 border-primary/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  Your Selection
-                </CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setShowEditDialog(true)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Pencil className="w-4 h-4 mr-1" />
-                  Edit
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-1 col-span-2 md:col-span-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Course</p>
-                  <p className="font-medium text-sm truncate">{bookingSummary.course}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Date</p>
-                  <p className="font-medium text-sm flex items-center gap-1">
-                    <Calendar className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{bookingSummary.date}</span>
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Players</p>
-                  <p className="font-medium text-sm flex items-center gap-1">
-                    <Users className="w-3 h-3 shrink-0" />
-                    {bookingSummary.players} Player{bookingSummary.players > 1 ? 's' : ''}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Time</p>
-                  <p className="font-medium text-sm flex items-center gap-1">
-                    <Clock className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{bookingSummary.earliestTime} - {bookingSummary.latestTime}</span>
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card className="golf-card-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <User className="w-5 h-5 text-primary" />
-              <span>Contact Information</span>
+        {/* ── 1. Course ─────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="w-4 h-4 text-primary" />
+              Golf Course
             </CardTitle>
-            <CardDescription>
-              We'll use this information to confirm your booking
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CourseSelector
+              selectedCourse={formData.preferredCourse}
+              onCourseSelect={(name) => update('preferredCourse', name)}
+            />
+          </CardContent>
+        </Card>
+
+        {/* ── 2. Date ───────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarIcon className="w-4 h-4 text-primary" />
+              Preferred Date
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCalendar(!showCalendar)}
+              className={cn('w-full justify-start text-left font-normal', !selectedDate && 'text-muted-foreground')}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {selectedDate ? format(selectedDate, 'PPP') : 'Select a date'}
+            </Button>
+            {showCalendar && (
+              <div className="mt-3 flex justify-center border rounded-lg p-3 bg-background">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDateSelect}
+                  disabled={(date) => date < new Date()}
+                  initialFocus
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── 3. Time window & Players ──────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Clock className="w-4 h-4 text-primary" />
+              Time &amp; Players
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Time range */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Preferred tee-time window</Label>
+              <Slider
+                value={[earliestTime, latestTime]}
+                onValueChange={(vals) => {
+                  setEarliestTime(vals[0]);
+                  setLatestTime(vals[1]);
+                  update('earliestTime', minutesToTimeString(vals[0]));
+                  update('latestTime',   minutesToTimeString(vals[1]));
+                }}
+                min={360}
+                max={1260}
+                step={30}
+                minStepsBetweenThumbs={1}
+              />
+              <div className="flex justify-between text-sm font-medium">
+                <span>{minutesToTimeString(earliestTime)}</span>
+                <span className="text-xs text-muted-foreground">6 AM – 9 PM</span>
+                <span>{minutesToTimeString(latestTime)}</span>
+              </div>
+            </div>
+
+            {/* Players */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-sm font-medium">
+                <Users className="h-4 w-4 text-primary" />
+                Number of Players
+              </Label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => update('numberOfPlayers', n)}
+                    className={cn(
+                      'flex-1 py-3 rounded-lg font-medium transition-colors border',
+                      formData.numberOfPlayers === n
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background hover:bg-muted/50 border-input'
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── 4. Contact Info ───────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <User className="w-4 h-4 text-primary" />
+              Your Information
+            </CardTitle>
+            <CardDescription>We'll use this to confirm your booking.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name *</Label>
                   <Input
                     id="firstName"
-                    type="text"
                     placeholder="John"
                     value={formData.firstName}
-                    onChange={(e) => updateFormData('firstName', e.target.value)}
-                    required
+                    onChange={(e) => update('firstName', e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name *</Label>
                   <Input
                     id="lastName"
-                    type="text"
                     placeholder="Doe"
                     value={formData.lastName}
-                    onChange={(e) => updateFormData('lastName', e.target.value)}
-                    required
+                    onChange={(e) => update('lastName', e.target.value)}
                   />
                 </div>
               </div>
@@ -340,9 +363,8 @@ const BookingForm = () => {
                     type="email"
                     placeholder="john@example.com"
                     value={formData.email}
-                    onChange={(e) => updateFormData('email', e.target.value)}
+                    onChange={(e) => update('email', e.target.value)}
                     className="pl-10"
-                    required
                   />
                 </div>
               </div>
@@ -356,20 +378,18 @@ const BookingForm = () => {
                     type="tel"
                     placeholder="(555) 123-4567"
                     value={formData.phone}
-                    onChange={(e) => updateFormData('phone', e.target.value)}
+                    onChange={(e) => update('phone', e.target.value)}
                     className="pl-10"
-                    required
                   />
                 </div>
               </div>
 
-              <div className="pt-6">
-                <Button 
-                  type="submit" 
-                  className="w-full text-lg py-6" 
-                  disabled={!formData.preferredCourse.trim()}
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  className="w-full text-base py-6"
+                  disabled={!canSubmit}
                 >
-                  <MapPin className="w-5 h-5 mr-2" />
                   Continue to Checkout
                 </Button>
               </div>
@@ -380,31 +400,8 @@ const BookingForm = () => {
         <AuthDialog
           isOpen={showAuthDialog}
           onClose={() => setShowAuthDialog(false)}
-          onSuccess={() => {
-            checkAuth();
-            navigate('/checkout');
-          }}
+          onSuccess={() => { checkAuth(); navigate('/checkout'); }}
         />
-
-        {selectedStateCode && storedDetails && (
-          <StateSelectionDialog
-            isOpen={showEditDialog}
-            onClose={() => setShowEditDialog(false)}
-            initialStep="course"
-            initialState={getStateFromCode(selectedStateCode)}
-            initialCourse={formData.preferredCourse}
-            initialBookingDetails={{
-              players: storedDetails.players,
-              date: storedDetails.date ? new Date(storedDetails.date) : undefined,
-              earliestTime: storedDetails.earliestTime,
-              latestTime: storedDetails.latestTime,
-            }}
-            onStateSelect={() => {
-              setShowEditDialog(false);
-              loadBookingDetails();
-            }}
-          />
-        )}
       </div>
     </div>
   );
