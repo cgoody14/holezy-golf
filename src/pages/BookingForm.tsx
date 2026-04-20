@@ -61,18 +61,25 @@ const BookingForm = () => {
     // Restore any previously saved selections from sessionStorage
     const storedCourse = sessionStorage.getItem('selectedCourse');
     const storedDetails = sessionStorage.getItem('bookingDetails');
-    if (storedCourse && storedDetails) {
+
+    // Always pre-fill course name if present (even without bookingDetails)
+    if (storedCourse) {
+      try {
+        const courseName = storedCourse.startsWith('{')
+          ? JSON.parse(storedCourse).name
+          : storedCourse;
+        setFormData(prev => ({ ...prev, preferredCourse: courseName || '' }));
+      } catch { /* ignore */ }
+    }
+
+    if (storedDetails) {
       try {
         const d = JSON.parse(storedDetails);
         if (d.date) setSelectedDate(new Date(d.date));
         if (d.earliestTime) setEarliestTime(d.earliestTime);
         if (d.latestTime) setLatestTime(d.latestTime);
-        const courseName = typeof storedCourse === 'string' && storedCourse.startsWith('{')
-          ? JSON.parse(storedCourse).name
-          : storedCourse;
         setFormData(prev => ({
           ...prev,
-          preferredCourse: courseName || '',
           numberOfPlayers: d.players || 1,
           date: d.date ? new Date(d.date).toISOString().split('T')[0] : '',
           earliestTime: d.earliestTimeStr || minutesToTimeString(d.earliestTime || 360),

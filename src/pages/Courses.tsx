@@ -61,6 +61,9 @@ interface Course {
   "Facility ID": number;
   Phone: string | null;
   "Course Website": string | null;
+  booking_platform?: string;
+  platform_course_id?: string;
+  platform_booking_url?: string;
 }
 
 interface GeocodedCourse extends Course {
@@ -227,7 +230,7 @@ const Courses = () => {
       try {
         let query = supabase
           .from("Course_Database")
-          .select('"Course Name", "Address", "Facility ID", "Phone", "Course Website"')
+          .select('"Course Name", "Address", "Facility ID", "Phone", "Course Website", booking_platform, platform_course_id, platform_booking_url')
           .not('"Course Name"', "is", null)
           .ilike('"Address"', `%${selectedState.name}%`);
 
@@ -289,15 +292,18 @@ const Courses = () => {
   };
 
   const handleBookCourse = () => {
-    if (selectedCourse && selectedState) {
-      navigate("/booking", {
-        state: {
-          preselectedState: selectedState.name,
-          preselectedCourse: selectedCourse["Course Name"],
-          preselectedFacilityId: selectedCourse["Facility ID"],
-        },
-      });
-    }
+    if (!selectedCourse) return;
+    // Store course info so BookingForm and Checkout can read it
+    sessionStorage.setItem('selectedCourse', JSON.stringify({
+      name:               selectedCourse["Course Name"],
+      facilityId:         selectedCourse["Facility ID"],
+      bookingPlatform:    selectedCourse.booking_platform    || 'chronogolf',
+      platformCourseId:   selectedCourse.platform_course_id  || String(selectedCourse["Facility ID"] || ''),
+      platformBookingUrl: selectedCourse.platform_booking_url || '',
+    }));
+    // Clear stale booking details so the date/time/players aren't pre-filled from a prior session
+    sessionStorage.removeItem('bookingDetails');
+    navigate('/book');
   };
 
   return (
