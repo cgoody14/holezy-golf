@@ -316,7 +316,17 @@ const Profile = () => {
             <User className="w-10 h-10 text-primary-foreground" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Your Profile</h1>
-          <p className="text-lg text-muted-foreground">{user.email}</p>
+          <p className="text-lg text-muted-foreground mb-4">{user.email}</p>
+          <Button
+            onClick={() => {
+              sessionStorage.removeItem('selectedCourse');
+              sessionStorage.removeItem('bookingDetails');
+              navigate('/book');
+            }}
+            className="px-8"
+          >
+            Book My Tee Time
+          </Button>
         </div>
 
         {/* Account Info */}
