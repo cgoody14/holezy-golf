@@ -128,57 +128,27 @@ const CourseSelector = ({ selectedCourse, onCourseSelect, stateFilter }: CourseS
     setIsOpen(false);
   };
 
-  const handleCustomCourseSubmit = async () => {
+  const handleCustomCourseSubmit = () => {
     if (!customCourse["Course Name"].trim() || !customCourse.city.trim() || !customCourse.state.trim()) return;
 
-    try {
-      const { data: existingCourses, error: fetchError } = await supabase
-        .from('Course_Database')
-        .select('"Facility ID"')
-        .gte('"Facility ID"', 900000)
-        .order('"Facility ID"', { ascending: false })
-        .limit(1);
+    const customCourseName = `${customCourse["Course Name"].trim()} (${customCourse.city}, ${customCourse.state})`;
 
-      if (fetchError) throw fetchError;
+    // Save to sessionStorage so Checkout can insert to DB after payment is authorized
+    sessionStorage.setItem('selectedCourse', JSON.stringify({
+      name:               customCourseName,
+      facilityId:         null,
+      bookingPlatform:    'custom',
+      platformCourseId:   '',
+      platformBookingUrl: '',
+      isCustom:           true,
+      customCity:         customCourse.city,
+      customState:        customCourse.state,
+    }));
 
-      let nextId = 900001;
-      if (existingCourses && existingCourses.length > 0) {
-        nextId = (existingCourses[0]["Facility ID"] || 900000) + 1;
-      }
-
-      const locationSuffix = customCourse.city
-        ? ` (${customCourse.city}${customCourse.state ? ', ' + customCourse.state : ''})`
-        : '';
-      const customCourseName = `${customCourse["Course Name"].trim()}${locationSuffix}`;
-
-      const { error: insertError } = await supabase
-        .from('Course_Database')
-        .insert({
-          "Facility ID": nextId,
-          "Course Name": customCourseName,
-          "Address": customCourse.city
-            ? `${customCourse.city}${customCourse.state ? ', ' + customCourse.state : ''}`
-            : null,
-          "Source": 'user_added'
-        });
-
-      if (insertError) throw insertError;
-
-      try {
-        await supabase.functions.invoke('send-admin-alert', {
-          body: { type: 'course_added', courseDetails: { name: customCourse["Course Name"], city: customCourse.city, state: customCourse.state, facilityId: nextId } }
-        });
-      } catch { /* non-fatal */ }
-
-      onCourseSelect(customCourseName);
-      setSearchTerm(customCourseName);
-      setShowCustomInput(false);
-      setCustomCourse({ "Course Name": '', city: '', state: '' });
-      loadCourses(0, true);
-    } catch (error) {
-      console.error('Error saving custom course:', error);
-      toast({ title: "Error adding course", description: "Please try again", variant: "destructive" });
-    }
+    onCourseSelect(customCourseName);
+    setSearchTerm(customCourseName);
+    setShowCustomInput(false);
+    setCustomCourse({ "Course Name": '', city: '', state: '' });
   };
 
   const handleLoadMore = () => {

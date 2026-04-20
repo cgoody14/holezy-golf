@@ -455,7 +455,11 @@ const Profile = () => {
                 <p className="text-muted-foreground mb-6">
                   You haven't made any tee time requests yet.
                 </p>
-                <Button onClick={() => navigate('/book')}>
+                <Button onClick={() => {
+                  sessionStorage.removeItem('selectedCourse');
+                  sessionStorage.removeItem('bookingDetails');
+                  navigate('/book');
+                }}>
                   Book Your First Tee Time
                 </Button>
               </div>
