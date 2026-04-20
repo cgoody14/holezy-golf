@@ -105,6 +105,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   };
 
   const createPaymentIntent = async () => {
+    setClientSecret(''); // disable submit while new intent loads
     try {
       console.log('Creating payment intent...', {
         amount: calculateTotal(),
