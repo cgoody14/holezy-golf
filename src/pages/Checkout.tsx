@@ -442,7 +442,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
             userEmail: bookingData.email,
             userName: `${bookingData.firstName} ${bookingData.lastName}`,
             bookingDetails: {
-              id: paymentIntent.id,
+              id: confirmedPaymentIntentId ?? '',
               course: bookingData.preferredCourse,
               date: bookingData.date,
               players: bookingData.numberOfPlayers,
