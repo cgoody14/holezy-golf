@@ -1,18 +1,15 @@
-import { useState } from 'react';
 import { Calendar, Clock, Users, MapPin, Star, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Link } from 'react-router-dom';
 import SignupCounter from '@/components/SignupCounter';
 import SEOHead, { combinedHomeStructuredData } from '@/components/SEOHead';
-import StateSelectionDialog from '@/components/StateSelectionDialog';
 import golfHeroImage from '@/assets/golf-hero.jpg';
 
 const Home = () => {
-  const [showStateDialog, setShowStateDialog] = useState(false);
   return (
     <div className="min-h-screen">
-      <SEOHead 
+      <SEOHead
         title="Holezy Golf | Tee Time Booking Across the USA"
         description="Stop chasing tee times. Holezy Golf monitors availability across thousands of courses nationwide and books your spot the moment it opens — for just $5 per player."
         canonicalUrl="/"
@@ -20,7 +17,7 @@ const Home = () => {
       />
       {/* Hero Section */}
       <section className="relative text-white py-20 px-4 overflow-hidden">
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url(${golfHeroImage})` }}
         />
@@ -32,13 +29,11 @@ const Home = () => {
           <p className="text-xl md:text-2xl mb-8 opacity-90">
             Tell us when and where you want to play, and we'll do the booking for you.
           </p>
-          <Button 
-            size="lg" 
-            className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100"
-            onClick={() => setShowStateDialog(true)}
-          >
-            Book My Tee Time
-          </Button>
+          <Link to="/book">
+            <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100">
+              Book My Tee Time
+            </Button>
+          </Link>
         </div>
       </section>
 
@@ -128,7 +123,7 @@ const Home = () => {
 
           <div className="grid md:grid-cols-3 gap-8 mb-12">
             <SignupCounter />
-            
+
             <Card className="text-center golf-card-shadow">
               <CardContent className="p-6">
                 <div className="flex justify-center mb-4">
@@ -162,7 +157,7 @@ const Home = () => {
               <CardContent className="p-6">
                 <Quote className="w-8 h-8 text-primary mb-4" />
                 <p className="text-lg mb-4 italic">
-                  "Holezy Golf saved me so much time! No more calling around to different courses. 
+                  "Holezy Golf saved me so much time! No more calling around to different courses.
                   I just tell them when I want to play and they handle everything."
                 </p>
                 <div className="flex items-center space-x-3">
@@ -232,13 +227,11 @@ const Home = () => {
                   <p className="text-lg">Confirmation email with all the details</p>
                 </div>
               </div>
-              <Button 
-                size="lg" 
-                className="text-lg px-8 py-6 mt-8"
-                onClick={() => setShowStateDialog(true)}
-              >
-                Let's Get Playing
-              </Button>
+              <Link to="/book">
+                <Button size="lg" className="text-lg px-8 py-6 mt-8">
+                  Let's Get Playing
+                </Button>
+              </Link>
             </div>
             <div className="bg-muted/30 rounded-lg p-8">
               <div className="text-center">
@@ -262,20 +255,13 @@ const Home = () => {
           <p className="text-xl text-white/90 mb-8">
             Weekend tee times go fast. Let Holezy grab yours.
           </p>
-          <Button 
-            size="lg" 
-            className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100"
-            onClick={() => setShowStateDialog(true)}
-          >
-            Secure My Spot
-          </Button>
+          <Link to="/book">
+            <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100">
+              Secure My Spot
+            </Button>
+          </Link>
         </div>
       </section>
-
-      <StateSelectionDialog 
-        isOpen={showStateDialog} 
-        onClose={() => setShowStateDialog(false)} 
-      />
     </div>
   );
 };
