@@ -1,12 +1,18 @@
 import { Calendar, Clock, Users, MapPin, Star, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import SignupCounter from '@/components/SignupCounter';
 import SEOHead, { combinedHomeStructuredData } from '@/components/SEOHead';
 import golfHeroImage from '@/assets/golf-hero.jpg';
 
+const clearBookingSession = () => {
+  sessionStorage.removeItem('selectedCourse');
+  sessionStorage.removeItem('bookingDetails');
+};
+
 const Home = () => {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen">
       <SEOHead
@@ -29,11 +35,10 @@ const Home = () => {
           <p className="text-xl md:text-2xl mb-8 opacity-90">
             Tell us when and where you want to play, and we'll do the booking for you.
           </p>
-          <Link to="/book">
-            <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100">
-              Book My Tee Time
-            </Button>
-          </Link>
+          <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100"
+            onClick={() => { clearBookingSession(); navigate('/book'); }}>
+            Book My Tee Time
+          </Button>
         </div>
       </section>
 
@@ -227,11 +232,10 @@ const Home = () => {
                   <p className="text-lg">Confirmation email with all the details</p>
                 </div>
               </div>
-              <Link to="/book">
-                <Button size="lg" className="text-lg px-8 py-6 mt-8">
-                  Let's Get Playing
-                </Button>
-              </Link>
+              <Button size="lg" className="text-lg px-8 py-6 mt-8"
+                onClick={() => { clearBookingSession(); navigate('/book'); }}>
+                Let's Get Playing
+              </Button>
             </div>
             <div className="bg-muted/30 rounded-lg p-8">
               <div className="text-center">
@@ -255,11 +259,10 @@ const Home = () => {
           <p className="text-xl text-white/90 mb-8">
             Weekend tee times go fast. Let Holezy grab yours.
           </p>
-          <Link to="/book">
-            <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100">
-              Secure My Spot
-            </Button>
-          </Link>
+          <Button size="lg" className="text-lg px-8 py-6 bg-white text-primary hover:bg-gray-100"
+            onClick={() => { clearBookingSession(); navigate('/book'); }}>
+            Secure My Spot
+          </Button>
         </div>
       </section>
     </div>

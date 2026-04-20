@@ -452,6 +452,46 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         console.error('Email error:', emailError);
       }
 
+      // If this is a custom course (user-added, not in DB yet), insert it now that payment is authorized
+      try {
+        const rawCourse = sessionStorage.getItem('selectedCourse');
+        if (rawCourse) {
+          const courseInfo = JSON.parse(rawCourse);
+          if (courseInfo.isCustom) {
+            const { data: existing } = await supabase
+              .from('Course_Database')
+              .select('"Facility ID"')
+              .gte('"Facility ID"', 900000)
+              .order('"Facility ID"', { ascending: false })
+              .limit(1);
+            const nextId = existing && existing.length > 0
+              ? (existing[0]["Facility ID"] || 900000) + 1
+              : 900001;
+            await supabase.from('Course_Database').insert({
+              "Facility ID": nextId,
+              "Course Name": courseInfo.name,
+              "Address": courseInfo.customCity
+                ? `${courseInfo.customCity}${courseInfo.customState ? ', ' + courseInfo.customState : ''}`
+                : null,
+              "Source": 'user_added',
+            });
+            await supabase.functions.invoke('send-admin-alert', {
+              body: {
+                type: 'course_added',
+                courseDetails: {
+                  name: courseInfo.name,
+                  city: courseInfo.customCity || '',
+                  state: courseInfo.customState || '',
+                  facilityId: nextId,
+                },
+              },
+            });
+          }
+        }
+      } catch (courseErr) {
+        console.error('Custom course save error:', courseErr);
+      }
+
       sessionStorage.removeItem('bookingData');
       
       toast({
