@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,10 +28,6 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
   const [promoCode, setPromoCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string>('');
-  const [intentType, setIntentType] = useState<'payment' | 'setup'>('payment');
-  const [paymentIntentId, setPaymentIntentId] = useState<string>('');
-  const [customerId, setCustomerId] = useState<string>('');
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<{
     name: string;
@@ -104,72 +100,31 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     setPromoCode('');
   };
 
-  const createPaymentIntent = async () => {
-    setClientSecret(''); // disable submit while new intent loads
-    try {
-      console.log('Creating payment intent...', {
+  const fetchIntent = async () => {
+    const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+      body: {
         amount: calculateTotal(),
         email: bookingData.email,
-        name: `${bookingData.firstName} ${bookingData.lastName}`
-      });
-
-      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
-        body: {
-          amount: calculateTotal(),
-          email: bookingData.email,
-          name: `${bookingData.firstName} ${bookingData.lastName}`
-        }
-      });
-
-      console.log('Payment intent response:', { data, error });
-
-      if (error) {
-        console.error('Payment intent error:', error);
-        throw error;
+        name: `${bookingData.firstName} ${bookingData.lastName}`,
       }
-
-      if (!data) {
-        throw new Error('No data returned from payment intent creation');
-      }
-
-      console.log('Intent created successfully:', data);
-      setClientSecret(data.clientSecret);
-      setIntentType(data.type ?? 'payment');
-      setPaymentIntentId(data.paymentIntentId ?? data.setupIntentId ?? '');
-      setCustomerId(data.customerId);
-    } catch (error: any) {
-      console.error('Error creating payment intent:', error);
-      toast({
-        title: "Payment Setup Failed",
-        description: error.message || "Unable to initialize payment. Please refresh and try again.",
-        variant: "destructive"
-      });
-    }
+    });
+    if (error) throw error;
+    if (!data) throw new Error('No data returned from payment intent creation');
+    return {
+      clientSecret: data.clientSecret as string,
+      intentType: (data.type ?? 'payment') as 'payment' | 'setup',
+      customerId: data.customerId as string,
+      intentId: (data.paymentIntentId ?? data.setupIntentId ?? '') as string,
+    };
   };
-
-  useEffect(() => {
-    createPaymentIntent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingData, appliedCoupon]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    console.log('Form submitted', { stripe: !!stripe, elements: !!elements, clientSecret: !!clientSecret });
 
     if (!stripe || !elements) {
       toast({
         title: "Payment Not Ready",
         description: "Payment system is still loading. Please wait a moment and try again.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!clientSecret) {
-      toast({
-        title: "Payment Not Initialized",
-        description: "Payment setup failed. Please refresh the page and try again.",
         variant: "destructive"
       });
       return;
@@ -185,9 +140,11 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     }
 
     setIsProcessing(true);
-    console.log('Processing payment...');
 
     try {
+      // Create the intent now — at submit time — so the amount includes any applied coupon
+      const { clientSecret, intentType, customerId, intentId: _intentId } = await fetchIntent();
+
       const cardElement = elements.getElement(CardElement) as StripeCardElement;
       if (!cardElement) throw new Error('Card element not found');
 
@@ -509,20 +466,11 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     } catch (error: any) {
       console.error('Booking error:', error);
       
-      // If payment was already authorized but booking failed, create new payment intent
-      if (error.message.includes('This PaymentIntent has already been confirmed')) {
-        toast({
-          title: "Payment Already Processed",
-          description: "Your previous payment was authorized. Creating a new payment form...",
-        });
-        await createPaymentIntent();
-      } else {
-        toast({
-          title: "Payment Failed",
-          description: error.message || "There was an error processing your payment. Please try again.",
-          variant: "destructive"
-        });
-      }
+      toast({
+        title: "Payment Failed",
+        description: error.message || "There was an error processing your payment. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -636,7 +584,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                 <span>Payment Authorization</span>
               </CardTitle>
               <CardDescription>
-                {intentType === 'setup'
+                {calculateTotal() === 0
                   ? 'Your card will be saved securely — no charge today'
                   : 'Your card will be authorized but not charged until your tee time is confirmed'}
               </CardDescription>
@@ -729,7 +677,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                   <div className="text-sm">
                     <p className="font-medium mb-1">Secure Payment Authorization</p>
                     <p className="text-muted-foreground">
-                      {intentType === 'setup'
+                      {calculateTotal() === 0
                         ? 'Your card details are encrypted and saved securely. No charge will be made today.'
                         : `Your payment information is encrypted and secure. We'll authorize your card for $${calculateTotal().toFixed(2)} and charge it only after we confirm your tee time booking.`}
                     </p>
@@ -740,13 +688,11 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={!stripe || !clientSecret || isProcessing}
+                  disabled={!stripe || isProcessing}
                 >
                   {isProcessing
-                    ? (intentType === 'setup' ? 'Saving Card...' : 'Authorizing...')
-                    : !clientSecret
-                    ? 'Loading...'
-                    : intentType === 'setup'
+                    ? 'Processing...'
+                    : calculateTotal() === 0
                     ? 'Save Card & Complete Booking'
                     : `Authorize Payment - $${calculateTotal().toFixed(2)}`}
                 </Button>
