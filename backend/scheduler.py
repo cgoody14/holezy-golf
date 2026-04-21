@@ -37,6 +37,7 @@ import os
 import traceback
 from datetime import datetime, timezone
 
+import requests
 from dotenv import load_dotenv, find_dotenv
 from supabase import create_client
 
@@ -94,6 +95,60 @@ def _update_job(job_id: str, fields: dict) -> None:
     _db().table("scheduled_jobs").update(
         {**fields, "updated_at": _now()}
     ).eq("id", job_id).execute()
+
+
+def _capture_payment(golfer_email: str, booking_date: str, course_name: str) -> None:
+    """
+    Look up the Stripe PaymentIntent for this booking in Client_Bookings and
+    capture it via the capture-payment Edge Function.  Non-fatal on failure.
+    """
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key  = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        print("[scheduler] _capture_payment: missing SUPABASE_URL or SUPABASE_SERVICE_KEY — skipping")
+        return
+
+    try:
+        db = _db()
+        result = (
+            db.table("Client_Bookings")
+            .select("stripe_payment_intent_id, payment_status")
+            .eq("email",            golfer_email)
+            .eq("preferred_course", course_name)
+            .eq("booking_date",     booking_date)
+            .in_("payment_status",  ["authorized", "pending"])
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        if not rows or not rows[0].get("stripe_payment_intent_id"):
+            print(f"[scheduler] _capture_payment: no authorized PaymentIntent found for {golfer_email}")
+            return
+
+        pi_id = rows[0]["stripe_payment_intent_id"]
+
+        edge_url = f"{supabase_url.rstrip('/')}/functions/v1/capture-payment"
+        resp = requests.post(
+            edge_url,
+            json={"paymentIntentId": pi_id},
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type":  "application/json",
+            },
+            timeout=30,
+        )
+        if resp.ok:
+            print(f"[scheduler] _capture_payment: captured {pi_id}")
+            # Mark Client_Bookings as paid
+            db.table("Client_Bookings").update(
+                {"payment_status": "captured", "booking_status": "booked"}
+            ).eq("stripe_payment_intent_id", pi_id).execute()
+        else:
+            print(f"[scheduler] _capture_payment: Edge Function returned {resp.status_code}: {resp.text[:300]}")
+
+    except Exception as exc:
+        print(f"[scheduler] _capture_payment error (non-fatal): {exc}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -292,7 +347,14 @@ async def scrape_until_found(booking_id: str) -> None:
                     "last_error":        None,
                 })
 
-                # 6. Notify golfer
+                # 6. Capture the customer's Stripe PaymentIntent
+                _capture_payment(
+                    golfer_email=job.get("golfer_email", ""),
+                    booking_date=booking_date,
+                    course_name=course_name,
+                )
+
+                # 7. Notify golfer
                 enriched = {
                     **job,
                     "confirmation_code": confirm_code,
