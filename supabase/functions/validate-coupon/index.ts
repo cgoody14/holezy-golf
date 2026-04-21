@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,8 +13,8 @@ serve(async (req) => {
   }
 
   try {
-    const { promoCode } = await req.json();
-    
+    const { promoCode, email } = await req.json();
+
     if (!promoCode || typeof promoCode !== 'string') {
       return new Response(
         JSON.stringify({ valid: false, error: "Promo code is required" }),
@@ -21,13 +22,12 @@ serve(async (req) => {
       );
     }
 
-    console.log("Validating promo code:", promoCode);
+    console.log("Validating promo code:", promoCode, "for email:", email);
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
     });
 
-    // Search for promotion codes (these are the codes customers enter)
     const promotionCodes = await stripe.promotionCodes.list({
       code: promoCode,
       active: true,
@@ -35,7 +35,6 @@ serve(async (req) => {
     });
 
     if (promotionCodes.data.length === 0) {
-      console.log("No promotion code found for:", promoCode);
       return new Response(
         JSON.stringify({ valid: false, error: "Invalid promo code" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
@@ -45,9 +44,6 @@ serve(async (req) => {
     const promotionCode = promotionCodes.data[0];
     const coupon = promotionCode.coupon;
 
-    console.log("Found coupon:", coupon);
-
-    // Check if coupon is still valid
     if (!coupon.valid) {
       return new Response(
         JSON.stringify({ valid: false, error: "This promo code has expired" }),
@@ -55,21 +51,38 @@ serve(async (req) => {
       );
     }
 
-    // Return coupon details
-    const response = {
-      valid: true,
-      couponId: coupon.id,
-      promotionCodeId: promotionCode.id,
-      name: coupon.name || promoCode,
-      percentOff: coupon.percent_off,
-      amountOff: coupon.amount_off ? coupon.amount_off / 100 : null, // Convert from cents
-      currency: coupon.currency,
-    };
+    // Check if this email has already used this promo code
+    if (email) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
 
-    console.log("Coupon validated successfully:", response);
+      const { data: existing } = await supabase
+        .from('Client_Bookings')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .eq('promo_code', promoCode)
+        .maybeSingle();
+
+      if (existing) {
+        return new Response(
+          JSON.stringify({ valid: false, error: "This promo code has already been used on your account" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+    }
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify({
+        valid: true,
+        couponId: coupon.id,
+        promotionCodeId: promotionCode.id,
+        name: coupon.name || promoCode,
+        percentOff: coupon.percent_off,
+        amountOff: coupon.amount_off ? coupon.amount_off / 100 : null,
+        currency: coupon.currency,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {

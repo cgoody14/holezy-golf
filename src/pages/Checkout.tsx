@@ -61,7 +61,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
     setIsValidatingCoupon(true);
     try {
       const { data, error } = await supabase.functions.invoke('validate-coupon', {
-        body: { promoCode: promoCode.trim() }
+        body: { promoCode: promoCode.trim(), email: bookingData.email }
       });
 
       if (error) throw error;
