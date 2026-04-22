@@ -88,3 +88,91 @@ railway login && railway init && railway up
 ## Environment Variables
 
 See `.env.example` for all required variables. Never commit `.env`.
+
+## Tee Time Card Hold Flow
+
+Some golf courses charge Holezy's company card at booking time (e.g. prepaid
+GolfNow tee times).  To recover that cost, the worker places a matching Stripe
+authorization (hold) on the customer's card immediately after the tee time is
+confirmed.  The hold is captured once we know the course charged us, or
+cancelled if they did not.
+
+### When this flow triggers
+
+A booking triggers a tee time authorization when **both** of these are true:
+
+1. `Course_Database.requires_card_hold = true` for the booked course
+2. `Course_Database.tee_time_cost_cents` is set to a non-zero value
+
+Set these in the Supabase Table Editor (or via migration) for each course that
+prepays at booking time.  If pricing is variable, leave `tee_time_cost_cents`
+null — the worker will log a warning and skip the authorization (manual action
+required; see below).
+
+### The three states
+
+```
+none  ──(authorize)──►  authorized  ──(capture)──►  captured
+                               │
+                               └────(cancel)────►  cancelled
+```
+
+| State        | Meaning |
+|---|---|
+| `none`       | Course does not require a hold, or hold not yet attempted |
+| `authorized` | Card is on hold; course has (or may have) charged Holezy |
+| `captured`   | Customer charged — Holezy has recovered the tee time cost |
+| `cancelled`  | Hold released — course did not charge Holezy |
+
+### Manually capture or cancel from a Python shell
+
+```python
+cd backend
+python
+
+from tee_time_payment import (
+    capture_tee_time_payment,
+    cancel_tee_time_authorization,
+    get_authorization_status,
+    handle_course_charge_unknown,
+)
+
+booking_id = "the-uuid-from-Client_Bookings"
+
+# Check current state
+get_authorization_status(booking_id)
+
+# Course charged Holezy → charge the customer
+capture_tee_time_payment(booking_id)
+
+# Course did NOT charge Holezy → release the hold
+cancel_tee_time_authorization(booking_id)
+
+# Unsure → log a warning and return current state
+handle_course_charge_unknown(booking_id)
+
+# Partial capture (e.g. course charged $40 instead of $50)
+capture_tee_time_payment(booking_id, amount_to_capture_cents=4000)
+```
+
+### Finding these PaymentIntents in Stripe Dashboard
+
+1. Go to **Payments** → **All payments**
+2. Click **Filters** → **Metadata**
+3. Set key = `purpose`, value = `tee_time_hold`
+
+Or search directly: `metadata[purpose]:tee_time_hold`
+
+All tee time hold PaymentIntents also carry `metadata[booking_id]` so you can
+look up the exact `Client_Bookings` row.
+
+### Running the test suite
+
+```bash
+# Make sure STRIPE_SECRET_KEY is a test key (sk_test_...)
+cd backend
+python tee_time_payment_test.py
+```
+
+Tests create real Stripe test objects and real Supabase rows, then clean up
+after themselves.  Never run against live keys.

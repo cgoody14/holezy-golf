@@ -168,6 +168,98 @@ def _capture_payment(golfer_email: str, booking_date: str, course_name: str) -> 
         print(f"[scheduler] _capture_payment error (non-fatal): {exc}")
 
 
+def _maybe_authorize_tee_time_hold(
+    golfer_email: str,
+    course_name: str,
+    booking_date: str,
+) -> None:
+    """
+    After a tee time is successfully booked, check whether the course charges
+    Holezy's card at booking time.  If so, authorize the customer's card for the
+    same amount so we can recover that cost.  Non-fatal — a failed authorization
+    is logged but does not affect the booking confirmation.
+    """
+    try:
+        from tee_time_payment import authorize_tee_time_payment
+
+        db = _db()
+
+        # 1. Check course configuration
+        course_result = (
+            db.table("Course_Database")
+            .select("requires_card_hold, tee_time_cost_cents")
+            .eq('"Course Name"', course_name)
+            .limit(1)
+            .execute()
+        )
+        course = (course_result.data or [{}])[0]
+
+        if not course.get("requires_card_hold"):
+            return
+
+        tee_time_cost = course.get("tee_time_cost_cents") or 0
+        if tee_time_cost <= 0:
+            print(
+                f"[scheduler] _maybe_authorize_tee_time_hold: "
+                f"course '{course_name}' has requires_card_hold=true but tee_time_cost_cents "
+                f"is null/0 — skipping authorization (variable pricing, manual review needed)"
+            )
+            return
+
+        # 2. Look up the customer's Stripe customer ID
+        account_result = (
+            db.table("Client_Accounts")
+            .select("stripe_customer_id")
+            .eq("email", golfer_email)
+            .limit(1)
+            .execute()
+        )
+        account = (account_result.data or [{}])[0]
+        stripe_customer_id = account.get("stripe_customer_id", "")
+
+        if not stripe_customer_id:
+            print(
+                f"[scheduler] _maybe_authorize_tee_time_hold: "
+                f"no stripe_customer_id for {golfer_email} — skipping authorization"
+            )
+            return
+
+        # 3. Find the Client_Bookings row ID
+        booking_result = (
+            db.table("Client_Bookings")
+            .select("id")
+            .eq("email",            golfer_email)
+            .eq("preferred_course", course_name)
+            .eq("booking_date",     booking_date)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        booking_row = (booking_result.data or [{}])[0]
+        booking_id = str(booking_row.get("id") or "")
+
+        if not booking_id:
+            print(
+                f"[scheduler] _maybe_authorize_tee_time_hold: "
+                f"no Client_Bookings row for {golfer_email} / {course_name} / {booking_date}"
+            )
+            return
+
+        # 4. Authorize
+        authorize_tee_time_payment(
+            booking_id=booking_id,
+            stripe_customer_id=stripe_customer_id,
+            amount_cents=tee_time_cost,
+        )
+        print(
+            f"[scheduler] _maybe_authorize_tee_time_hold: authorized "
+            f"{tee_time_cost} cents for booking {booking_id}"
+        )
+
+    except Exception as exc:
+        print(f"[scheduler] _maybe_authorize_tee_time_hold error (non-fatal): {exc}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SENTINEL — distinguishes "no slots yet" from real errors
 # ─────────────────────────────────────────────────────────────────────────────
@@ -364,14 +456,22 @@ async def scrape_until_found(booking_id: str) -> None:
                     "last_error":        None,
                 })
 
-                # 6. Capture the customer's Stripe PaymentIntent
+                # 6. Capture the customer's Stripe PaymentIntent (concierge fee)
                 _capture_payment(
                     golfer_email=job.get("golfer_email", ""),
                     booking_date=booking_date,
                     course_name=course_name,
                 )
 
-                # 7. Notify golfer
+                # 7. If the course charges Holezy's card at booking time,
+                #    authorize the customer's card for the same tee time cost
+                _maybe_authorize_tee_time_hold(
+                    golfer_email=job.get("golfer_email", ""),
+                    course_name=course_name,
+                    booking_date=booking_date,
+                )
+
+                # 9. Notify golfer
                 enriched = {
                     **job,
                     "confirmation_code": confirm_code,

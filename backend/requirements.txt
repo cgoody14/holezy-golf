@@ -4,3 +4,4 @@ python-dotenv
 sentry-sdk
 resend
 requests
+stripe
