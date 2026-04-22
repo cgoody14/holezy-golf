@@ -6,14 +6,13 @@ CREATE TABLE IF NOT EXISTS public.scheduled_jobs (
   -- Identity
   id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Link back to the originating preference (optional — may be NULL for
-  -- jobs created directly without a tee_time_preferences row)
-  booking_id              UUID        REFERENCES tee_time_preferences(id) ON DELETE SET NULL,
+  -- Link back to the originating preference (optional — may be NULL)
+  booking_id              UUID,
 
   -- Scheduling
   fire_at                 TIMESTAMPTZ NOT NULL,
   status                  TEXT        NOT NULL DEFAULT 'pending'
-                                        CHECK (status IN ('pending','running','booked','failed')),
+                                        CHECK (status IN ('pending','running','booked','failed','cancelled')),
   attempts                INT         NOT NULL DEFAULT 0,
   result                  JSONB,
 
