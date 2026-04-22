@@ -33,39 +33,28 @@ serve(async (req) => {
       console.log("Created new customer:", customerId);
     }
 
-    // $0 total (100% coupon etc.) — use SetupIntent to collect card without charging
-    if (amount === 0) {
-      const setupIntent = await stripe.setupIntents.create({
-        customer: customerId,
-        usage: "off_session",          // card can be charged later, off-session
-        payment_method_types: ["card"],
-        metadata: { email, name },
-      });
+    // Always use a PaymentIntent — even for $0 (coupon) orders — so the card is
+    // logged as a transaction in Stripe and saved for future off-session charges.
+    // Minimum $1.00 hold (Stripe requires >= $0.50; we use $1 for clarity).
+    // If the actual amount due is $0, the worker cancels the hold after booking
+    // so the customer is never charged.
+    const authorizeAmount = Math.max(100, Math.round(amount * 100)); // cents, min $1.00
 
-      console.log("SetupIntent created:", setupIntent.id);
-
-      return new Response(
-        JSON.stringify({
-          type: "setup",
-          clientSecret: setupIntent.client_secret,
-          setupIntentId: setupIntent.id,
-          customerId,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    }
-
-    // Paid flow — authorize card, capture only after tee time confirmed
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // cents
+      amount: authorizeAmount,
       currency: "usd",
       customer: customerId,
       capture_method: "manual",
       setup_future_usage: "off_session",
-      metadata: { email, name },
+      metadata: {
+        email,
+        name,
+        // Preserve the real amount owed so the worker knows what to capture/cancel
+        amount_due_cents: String(Math.round(amount * 100)),
+      },
     });
 
-    console.log("PaymentIntent created:", paymentIntent.id);
+    console.log("PaymentIntent created:", paymentIntent.id, "authorize:", authorizeAmount, "cents, amount_due:", Math.round(amount * 100), "cents");
 
     return new Response(
       JSON.stringify({

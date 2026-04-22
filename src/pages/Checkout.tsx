@@ -154,41 +154,23 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         phone: bookingData.phone,
       };
 
-      // $0 flow: SetupIntent — collect card without charging
-      // Paid flow: PaymentIntent with manual capture (authorize only)
-      let confirmedPaymentMethodId: string;
-      let confirmedPaymentIntentId: string | null = null;
-      let confirmedPaymentStatus: 'authorized' | 'free';
-
-      if (intentType === 'setup') {
-        console.log('Confirming card setup (free booking)...');
-        const { error: setupError, setupIntent } = await stripe.confirmCardSetup(
-          clientSecret,
-          { payment_method: { card: cardElement, billing_details: billingDetails } }
-        );
-        if (setupError) throw new Error(setupError.message);
-        if (!setupIntent || setupIntent.status !== 'succeeded') {
-          throw new Error(`Card setup failed. Status: ${setupIntent?.status}`);
-        }
-        console.log('Card setup succeeded:', setupIntent.id);
-        confirmedPaymentMethodId = setupIntent.payment_method as string;
-        confirmedPaymentIntentId = null;
-        confirmedPaymentStatus   = 'free';
-      } else {
-        console.log('Confirming card payment (paid booking)...');
-        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-          clientSecret,
-          { payment_method: { card: cardElement, billing_details: billingDetails } }
-        );
-        if (confirmError) throw new Error(confirmError.message);
-        if (!paymentIntent || paymentIntent.status !== 'requires_capture') {
-          throw new Error(`Payment authorization failed. Status: ${paymentIntent?.status}`);
-        }
-        console.log('Payment authorized:', paymentIntent.id);
-        confirmedPaymentMethodId = paymentIntent.payment_method as string;
-        confirmedPaymentIntentId = paymentIntent.id;
-        confirmedPaymentStatus   = 'authorized';
+      // Always a PaymentIntent — even for $0 (coupon) orders the server issues a
+      // $1 hold so the card is logged in Stripe and saved for future charges.
+      // The worker cancels the hold after booking if amount_due = $0.
+      console.log('Confirming card payment...');
+      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+        clientSecret,
+        { payment_method: { card: cardElement, billing_details: billingDetails } }
+      );
+      if (confirmError) throw new Error(confirmError.message);
+      if (!paymentIntent || paymentIntent.status !== 'requires_capture') {
+        throw new Error(`Payment authorization failed. Status: ${paymentIntent?.status}`);
       }
+      console.log('Payment authorized:', paymentIntent.id);
+      const confirmedPaymentMethodId = paymentIntent.payment_method as string;
+      const confirmedPaymentIntentId = paymentIntent.id;
+      const confirmedPaymentStatus: 'authorized' | 'free' =
+        calculateTotal() === 0 ? 'free' : 'authorized';
 
       // Get payment method details from Stripe
       let cardLast4 = '****';
@@ -456,9 +438,9 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
       sessionStorage.removeItem('bookingData');
       
       toast({
-        title: intentType === 'setup' ? "Booking Confirmed!" : "Payment Authorized!",
-        description: intentType === 'setup'
-          ? "Your booking is confirmed. Your card has been saved for future use."
+        title: "Payment Authorized!",
+        description: calculateTotal() === 0
+          ? "A $1 hold has been placed to verify your card. It will be released once your tee time is confirmed."
           : "Your card has been authorized. We'll charge it once your tee time is confirmed.",
       });
 
@@ -584,9 +566,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                 <span>Payment Authorization</span>
               </CardTitle>
               <CardDescription>
-                {calculateTotal() === 0
-                  ? 'Your card will be saved securely — no charge today'
-                  : 'Your card will be authorized but not charged until your tee time is confirmed'}
+                {'Your card will be authorized but not charged until your tee time is confirmed'}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -678,7 +658,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                     <p className="font-medium mb-1">Secure Payment Authorization</p>
                     <p className="text-muted-foreground">
                       {calculateTotal() === 0
-                        ? 'Your card details are encrypted and saved securely. No charge will be made today.'
+                        ? "Your promo code covers the full concierge fee. We'll place a temporary $1 hold to verify your card — it will be released once your tee time is confirmed."
                         : `Your payment information is encrypted and secure. We'll authorize your card for $${calculateTotal().toFixed(2)} and charge it only after we confirm your tee time booking.`}
                     </p>
                   </div>
@@ -693,7 +673,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
                   {isProcessing
                     ? 'Processing...'
                     : calculateTotal() === 0
-                    ? 'Save Card & Complete Booking'
+                    ? 'Verify Card & Complete Booking'
                     : `Authorize Payment - $${calculateTotal().toFixed(2)}`}
                 </Button>
               </form>

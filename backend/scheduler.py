@@ -126,12 +126,30 @@ def _capture_payment(golfer_email: str, booking_date: str, course_name: str) -> 
             print(f"[scheduler] _capture_payment: no authorized PaymentIntent found for {golfer_email}")
             return
 
-        pi_id = rows[0]["stripe_payment_intent_id"]
+        pi_id         = rows[0]["stripe_payment_intent_id"]
+        amount_charged = float(rows[0].get("amount_charged") or 0)
+
+        if amount_charged <= 0:
+            # Free booking (coupon covered 100%) — cancel the $1 hold, no charge
+            stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+            resp = requests.post(
+                f"https://api.stripe.com/v1/payment_intents/{pi_id}/cancel",
+                auth=(stripe_key, ""),
+                timeout=30,
+            )
+            if resp.ok:
+                print(f"[scheduler] _capture_payment: cancelled free-booking hold {pi_id}")
+                db.table("Client_Bookings").update(
+                    {"payment_status": "cancelled", "booking_status": "booked"}
+                ).eq("stripe_payment_intent_id", pi_id).execute()
+            else:
+                print(f"[scheduler] _capture_payment: Stripe cancel returned {resp.status_code}: {resp.text[:300]}")
+            return
 
         edge_url = f"{supabase_url.rstrip('/')}/functions/v1/capture-payment"
         resp = requests.post(
             edge_url,
-            json={"paymentIntentId": pi_id},
+            json={"paymentIntentId": pi_id, "amount": amount_charged},
             headers={
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type":  "application/json",
@@ -139,8 +157,7 @@ def _capture_payment(golfer_email: str, booking_date: str, course_name: str) -> 
             timeout=30,
         )
         if resp.ok:
-            print(f"[scheduler] _capture_payment: captured {pi_id}")
-            # Mark Client_Bookings as paid
+            print(f"[scheduler] _capture_payment: captured ${amount_charged:.2f} on {pi_id}")
             db.table("Client_Bookings").update(
                 {"payment_status": "captured", "booking_status": "booked"}
             ).eq("stripe_payment_intent_id", pi_id).execute()
