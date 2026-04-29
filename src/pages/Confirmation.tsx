@@ -14,6 +14,7 @@ interface ConfirmationData {
   earliestTime: string;
   latestTime: string;
   numberOfPlayers: number;
+  numberOfHoles: 9 | 18;
   preferredCourse: string;
   totalPrice: number;
   promoCode?: string;
@@ -150,6 +151,11 @@ const Confirmation = () => {
                     <span>Players:</span>
                   </span>
                   <span className="font-medium">{confirmationData.numberOfPlayers}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Holes:</span>
+                  <span className="font-medium">{confirmationData.numberOfHoles ?? 18}</span>
                 </div>
                 
                 <div className="flex justify-between items-start">

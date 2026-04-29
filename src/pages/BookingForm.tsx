@@ -23,6 +23,7 @@ export interface BookingData {
   earliestTime: string;
   latestTime: string;
   numberOfPlayers: number;
+  numberOfHoles: 9 | 18;
   preferredCourse: string;
 }
 
@@ -53,6 +54,7 @@ const BookingForm = () => {
     earliestTime: '',
     latestTime: '',
     numberOfPlayers: 1,
+    numberOfHoles: 18,
     preferredCourse: '',
   });
 
@@ -299,6 +301,31 @@ const BookingForm = () => {
                     )}
                   >
                     {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Holes */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-sm font-medium">
+                <MapPin className="h-4 w-4 text-primary" />
+                Number of Holes
+              </Label>
+              <div className="flex gap-2">
+                {([9, 18] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => update('numberOfHoles', n)}
+                    className={cn(
+                      'flex-1 py-3 rounded-lg font-medium transition-colors border',
+                      formData.numberOfHoles === n
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background hover:bg-muted/50 border-input'
+                    )}
+                  >
+                    {n} holes
                   </button>
                 ))}
               </div>

@@ -304,6 +304,7 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
         earliest_time: convertTo24Hour(bookingData.earliestTime),
         latest_time: convertTo24Hour(bookingData.latestTime),
         number_of_players: bookingData.numberOfPlayers,
+        number_of_holes:   bookingData.numberOfHoles ?? 18,
         preferred_course: bookingData.preferredCourse,
         facility_id: facilityId,
         has_online_booking: hasOnlineBooking,
