@@ -18,6 +18,7 @@ interface AlertRequest {
     course: string;
     date: string;
     players: number;
+    holes?: number;
     totalPrice: number;
     courseAddress?: string;
     facilityId?: string;
@@ -94,6 +95,7 @@ const handler = async (req: Request): Promise<Response> => {
           <li><strong>Facility ID:</strong> ${bookingDetails?.facilityId || 'Not provided'}</li>
           <li><strong>Date:</strong> ${bookingDetails?.date}</li>
           <li><strong>Players:</strong> ${bookingDetails?.players}</li>
+          <li><strong>Holes:</strong> ${bookingDetails?.holes ?? 18}</li>
           <li><strong>Total Price:</strong> $${bookingDetails?.totalPrice}</li>
           <li><strong>Booking ID:</strong> ${bookingDetails?.id}</li>
           <li><strong>Booked:</strong> ${new Date().toLocaleString()}</li>
