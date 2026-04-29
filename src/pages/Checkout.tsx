@@ -386,6 +386,8 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
               id: confirmedPaymentIntentId ?? '',
               course: bookingData.preferredCourse,
               date: bookingData.date,
+              earliestTime: bookingData.earliestTime,
+              latestTime: bookingData.latestTime,
               players: bookingData.numberOfPlayers,
               holes: bookingData.numberOfHoles ?? 18,
               totalPrice: calculateTotal(),

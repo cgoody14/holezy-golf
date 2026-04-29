@@ -17,6 +17,8 @@ interface AlertRequest {
     id: string;
     course: string;
     date: string;
+    earliestTime?: string;
+    latestTime?: string;
     players: number;
     holes?: number;
     totalPrice: number;
@@ -94,6 +96,7 @@ const handler = async (req: Request): Promise<Response> => {
           <li><strong>Course Address:</strong> ${bookingDetails?.courseAddress || 'Not provided'}</li>
           <li><strong>Facility ID:</strong> ${bookingDetails?.facilityId || 'Not provided'}</li>
           <li><strong>Date:</strong> ${bookingDetails?.date}</li>
+          <li><strong>Booking Window:</strong> ${bookingDetails?.earliestTime ?? '—'} – ${bookingDetails?.latestTime ?? '—'}</li>
           <li><strong>Players:</strong> ${bookingDetails?.players}</li>
           <li><strong>Holes:</strong> ${bookingDetails?.holes ?? 18}</li>
           <li><strong>Total Price:</strong> $${bookingDetails?.totalPrice}</li>
