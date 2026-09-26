@@ -170,15 +170,14 @@ async def search_slots(
     print(f"[chronogolf] ② search → {nav}")
 
     # Capture the CSRF token from the app's own API requests as the page loads.
-    # ChronoGolf sends X-CSRF-Token on every XHR, so we read it off a real one
-    # instead of guessing where it's stored — book_slot needs it for the POSTs.
-    csrf_box: dict = {}
-    def _grab_csrf(req):
-        if not csrf_box.get("t"):
-            t = req.headers.get("x-csrf-token")
-            if t:
-                csrf_box["t"] = t
-    page.on("request", _grab_csrf)
+    # ChronoGolf sends X-CSRF-Token on its XHRs; we collect the requests and read
+    # their FULL headers (all_headers() — the sync .headers property drops custom
+    # headers) after load. book_slot needs this token for the POSTs.
+    seen_reqs: list = []
+    def _collect(req):
+        if "chronogolf.com" in req.url:
+            seen_reqs.append(req)
+    page.on("request", _collect)
 
     data = None
     try:
@@ -236,13 +235,44 @@ async def search_slots(
         pretty = [f"{s['start_label']}(${s['subtotal']})" for s in slots]
         print(f"[chronogolf]    {len(teetimes)} slot(s) → {len(slots)} in {earliest}-{latest}: {pretty or '—'}")
 
-        # Stash the CSRF token captured during load so book_slot can POST.
-        if csrf_box.get("t"):
+        # Let late XHRs settle, then read the CSRF token off any captured request.
+        try:
+            await page.wait_for_load_state("networkidle", timeout=8_000)
+        except Exception:
+            pass
+
+        csrf = None
+        for r in seen_reqs:
             try:
-                page._holezy["csrf"] = csrf_box["t"]
+                h = await r.all_headers()
+            except Exception:
+                continue
+            if h.get("x-csrf-token"):
+                csrf = h["x-csrf-token"]
+                break
+        if csrf:
+            try:
+                page._holezy["csrf"] = csrf
             except Exception:
                 pass
-        print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf_box.get('t') else 'NOT captured ⚠'}")
+        print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf else 'NOT captured ⚠'}")
+
+        if not csrf:
+            # Diagnostic: show where the token might live so we can adjust.
+            try:
+                metas = await page.evaluate(
+                    "() => Array.from(document.querySelectorAll('meta')).map(m => (m.name||m.getAttribute('property')||'?') + '=' + (m.content||'').slice(0,24))"
+                )
+                print(f"[chronogolf]    (debug) meta tags: {metas}")
+            except Exception:
+                pass
+            try:
+                api_hits = [r.url.split('chronogolf.com')[-1][:60] for r in seen_reqs
+                            if '/marketplace' in r.url or '/private_api' in r.url][:12]
+                print(f"[chronogolf]    (debug) api requests seen: {api_hits}")
+            except Exception:
+                pass
+
         return slots
 
     except Exception:
@@ -250,7 +280,7 @@ async def search_slots(
         raise
     finally:
         try:
-            page.remove_listener("request", _grab_csrf)
+            page.remove_listener("request", _collect)
         except Exception:
             pass
 
