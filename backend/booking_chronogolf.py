@@ -34,9 +34,9 @@
 # Stripe-Issuing path (a later phase) instead of failing silently.
 # =============================================================================
 
-import asyncio
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -95,6 +95,52 @@ def _api_headers(csrf: str | None = None) -> dict:
     if csrf:
         h["X-CSRF-Token"] = csrf
     return h
+
+
+_CSRF_META_RE = re.compile(
+    r'name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']', re.I
+)
+
+
+async def _fetch_csrf(page: Page, course_url: str) -> str | None:
+    """
+    Get the Rails CSRF token the booking POSTs require.
+
+    The token is NOT on the Next.js tee-sheet page (that page has no csrf meta).
+    It lives on the legacy /club/<slug>/booking/ checkout page — that is exactly
+    the Referer ChronoGolf itself sends on the reservation POSTs. We load that
+    page and read <meta name="csrf-token">. Try the raw server-rendered HTML
+    first (Rails renders the meta into the document — fast, no JS), then fall
+    back to the rendered DOM in case a client injects it.
+    """
+    base = course_url.split("?")[0].rstrip("/")
+    booking_url = f"{base}/booking/?source=chronogolf&medium=profile"
+
+    # 1) Raw server-rendered HTML — the token is a meta tag in the document.
+    try:
+        resp = await page.request.get(booking_url, headers={"Accept": "text/html"})
+        if resp.ok:
+            m = _CSRF_META_RE.search(await resp.text())
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+
+    # 2) Rendered DOM fallback (client-injected meta).
+    try:
+        await page.goto(booking_url, wait_until="domcontentloaded", timeout=30_000)
+        tok = await page.evaluate(
+            "() => { const m = document.querySelector('meta[name=\"csrf-token\"]');"
+            " return m ? m.content : null; }"
+        )
+        if tok:
+            return tok
+        m = _CSRF_META_RE.search(await page.content())
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,16 +216,6 @@ async def search_slots(
     nav = f"{course_url}?date={date}&nb_holes={holes}"
     print(f"[chronogolf] ② search → {nav}")
 
-    # Capture the CSRF token from the app's own API requests as the page loads.
-    # ChronoGolf sends X-CSRF-Token on its XHRs; we collect the requests and read
-    # their FULL headers (all_headers() — the sync .headers property drops custom
-    # headers) after load. book_slot needs this token for the POSTs.
-    seen_reqs: list = []
-    def _collect(req):
-        if "chronogolf.com" in req.url:
-            seen_reqs.append(req)
-    page.on("request", _collect)
-
     data = None
     try:
         # Let the SPA fire its own teetimes call and capture the response — this
@@ -236,55 +272,23 @@ async def search_slots(
         pretty = [f"{s['start_label']}(${s['subtotal']})" for s in slots]
         print(f"[chronogolf]    {len(teetimes)} slot(s) → {len(slots)} in {earliest}-{latest}: {pretty or '—'}")
 
-        # Brief settle for a couple more XHRs (NOT networkidle — this SPA never idles).
-        await asyncio.sleep(2)
-
-        # Read the CSRF token off any captured API request (full headers).
-        csrf, checked = None, 0
-        for r in seen_reqs:
-            if "/marketplace" not in r.url and "/private_api" not in r.url:
-                continue
+        # Grab the CSRF token the booking POSTs need — from the /booking/ checkout
+        # page, not this Next.js tee-sheet (which carries no csrf meta).
+        if slots:
+            csrf = await _fetch_csrf(page, course_url)
             try:
-                h = await r.all_headers()
-            except Exception:
-                continue
-            checked += 1
-            if h.get("x-csrf-token"):
-                csrf = h["x-csrf-token"]
-                break
-        if csrf:
-            try:
-                page._holezy["csrf"] = csrf
+                page._holezy["course_url"] = course_url   # let book_slot re-fetch if needed
+                if csrf:
+                    page._holezy["csrf"] = csrf
             except Exception:
                 pass
-        print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf else 'NOT captured ⚠'} "
-              f"(checked {checked} api requests)")
-
-        # Always print diagnostics this run so we can pinpoint the token source.
-        try:
-            metas = await page.evaluate(
-                "() => Array.from(document.querySelectorAll('meta')).map(m => (m.name||m.getAttribute('property')||'?') + '=' + (m.content||'').slice(0,24))"
-            )
-            print(f"[chronogolf]    (debug) meta tags: {metas}")
-        except Exception as e:
-            print(f"[chronogolf]    (debug) meta read failed: {e}")
-        try:
-            api_hits = [r.url.split('chronogolf.com')[-1][:55] for r in seen_reqs
-                        if '/marketplace' in r.url or '/private_api' in r.url][:14]
-            print(f"[chronogolf]    (debug) api requests seen: {api_hits}")
-        except Exception:
-            pass
+            print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf else 'NOT captured ⚠'}")
 
         return slots
 
     except Exception:
         await _shot(page, "search_error")
         raise
-    finally:
-        try:
-            page.remove_listener("request", _collect)
-        except Exception:
-            pass
 
 
 async def _course_uuid(page: Page) -> str | None:
@@ -320,9 +324,14 @@ async def book_slot(page: Page, slot: dict) -> str:
     label       = slot.get("start_label", "?")
     print(f"[chronogolf] ③ book {label} · {players} players · teetime={teetime_id}")
 
+    if not csrf and holezy.get("course_url"):
+        csrf = await _fetch_csrf(page, holezy["course_url"])   # self-heal
+        if csrf:
+            holezy["csrf"] = csrf
     if not csrf:
         raise RuntimeError(
-            "No CSRF token — call search_slots first (it captures the token from ChronoGolf's API)."
+            "No CSRF token — could not read it from the /booking/ checkout page. "
+            "Your session may have expired: re-run python import_chronogolf_cookies.py."
         )
 
     try:
