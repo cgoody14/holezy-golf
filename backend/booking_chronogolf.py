@@ -122,7 +122,8 @@ async def login(page: Page, email: str = "", password: str = "") -> None:
             await _shot(page, "session_expired")
             raise SessionExpired(
                 "No valid ChronoGolf session (not logged in). "
-                "Run:  python save_chronogolf_session.py  — log in + solve the CAPTCHA once — then retry."
+                "Log in to ChronoGolf in your own browser, export your cookies, and run:  "
+                "python import_chronogolf_cookies.py"
             )
 
         csrf = await page.evaluate(
