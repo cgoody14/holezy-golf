@@ -42,3 +42,7 @@ venv/
 # ChronoGolf saved login session (sensitive — never commit)
 chronogolf_state.json
 backend/chronogolf_state.json
+
+# Raw cookie export (sensitive — never commit)
+cookies.json
+backend/cookies.json

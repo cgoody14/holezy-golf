@@ -51,7 +51,7 @@ async def main() -> int:
     state_file = os.getenv("CHRONOGOLF_STATE", "chronogolf_state.json")
     if not os.path.exists(state_file):
         print(f"❌ No saved session ({state_file}).")
-        print("   Run this first to log in once:  python save_chronogolf_session.py")
+        print("   Export your ChronoGolf cookies once, then run:  python import_chronogolf_cookies.py")
         return 2
 
     headless = os.getenv("HEADLESS", "true").lower() != "false"
@@ -68,7 +68,7 @@ async def main() -> int:
             headless=headless, slow_mo=slow_mo,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
-        context = await browser.new_context(storage_state=state_file)   # ← reuse saved login
+        context = await browser.new_context(storage_state=state_file)   # ← reuse your saved login
         page = await context.new_page()
         try:
             await engine.login(page)   # verifies the saved session
