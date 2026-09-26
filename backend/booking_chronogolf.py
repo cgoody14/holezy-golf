@@ -48,9 +48,19 @@ CHRONO_BASE    = "https://www.chronogolf.com"
 LOGIN_URL      = f"{CHRONO_BASE}/users/sign_in"
 SCREENSHOT_DIR = Path("/tmp")
 
+# ChronoGolf gates its login form with a CAPTCHA, so a bot can't log in from
+# scratch. Instead a human logs in once (save_chronogolf_session.py) and the
+# resulting cookies are saved as a Playwright storage_state file; every run
+# loads that state and is already authenticated. STATE_FILE is that file.
+STATE_FILE = os.getenv("CHRONOGOLF_STATE", "chronogolf_state.json")
+
 
 class RequiresOnlinePayment(Exception):
     """Raised when a course forces online payment (needs the card/Issuing path)."""
+
+
+class SessionExpired(Exception):
+    """Raised when no valid ChronoGolf session is loaded (re-run save_chronogolf_session.py)."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -90,31 +100,31 @@ def _api_headers(csrf: str | None = None) -> dict:
 # 1 · LOGIN  (also captures user id + CSRF token onto the page object)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def login(page: Page, email: str, password: str) -> None:
+async def login(page: Page, email: str = "", password: str = "") -> None:
     """
-    Log in through ChronoGolf's form, then cache the numeric user id and CSRF
-    token on the page (page._holezy) for the API calls that follow.
+    Verify the saved ChronoGolf session (loaded via storage_state at context
+    creation) and cache the numeric user id + CSRF token on the page for the
+    API calls that follow. Because ChronoGolf's login form has a CAPTCHA, we do
+    NOT fill it here — the session comes from a one-time human login captured by
+    save_chronogolf_session.py.
+
+    Raises SessionExpired if no valid session is present.
     """
-    print(f"[chronogolf] ① login → {LOGIN_URL}")
+    print("[chronogolf] ① verifying saved session…")
     try:
-        await page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
-        await page.fill("#user_email, input[name='user[email]'], input[type='email']", email)
-        await page.fill("#user_password, input[name='user[password]'], input[type='password']", password)
-        async with page.expect_navigation(wait_until="domcontentloaded", timeout=20_000):
-            await page.click("input[type='submit'], button[type='submit']")
+        # Land on a marketplace page so the CSRF meta tag + cookies are active.
+        await page.goto(f"{CHRONO_BASE}/marketplace", wait_until="domcontentloaded", timeout=30_000)
 
-        if "sign_in" in page.url:
-            await _shot(page, "login_failed")
-            raise RuntimeError("Login failed — still on sign_in page. Check credentials.")
-
-        # Numeric user id (the booker) — GET /marketplace/sessions returns it.
         sess = await page.request.get(f"{CHRONO_BASE}/marketplace/sessions", headers=_api_headers())
-        if not sess.ok:
-            raise RuntimeError(f"/marketplace/sessions → HTTP {sess.status}")
-        user = await sess.json()
+        user = await sess.json() if sess.ok else {}
         user_id = user.get("id")
+        if not user_id:
+            await _shot(page, "session_expired")
+            raise SessionExpired(
+                "No valid ChronoGolf session (not logged in). "
+                "Run:  python save_chronogolf_session.py  — log in + solve the CAPTCHA once — then retry."
+            )
 
-        # CSRF token from the SPA's meta tag (Rails standard).
         csrf = await page.evaluate(
             "() => { const m = document.querySelector('meta[name=\"csrf-token\"]'); return m ? m.content : null; }"
         )
@@ -122,7 +132,9 @@ async def login(page: Page, email: str, password: str) -> None:
         page._holezy = {"user_id": user_id, "csrf": csrf,
                         "name": f"{user.get('first_name','')} {user.get('last_name','')}".strip(),
                         "email": user.get("email")}
-        print(f"[chronogolf]    ✅ signed in as {user.get('email')} (id={user_id}, csrf={'yes' if csrf else 'MISSING'})")
+        print(f"[chronogolf]    ✅ session OK — {user.get('email')} (id={user_id}, csrf={'yes' if csrf else 'MISSING'})")
+    except SessionExpired:
+        raise
     except Exception:
         await _shot(page, "login_error")
         raise

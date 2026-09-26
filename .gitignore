@@ -38,3 +38,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# ChronoGolf saved login session (sensitive — never commit)
+chronogolf_state.json
+backend/chronogolf_state.json
