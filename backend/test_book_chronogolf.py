@@ -47,10 +47,11 @@ def _args():
 
 async def main() -> int:
     a = _args()
-    email    = os.getenv("CHRONOGOLF_EMAIL")
-    password = os.getenv("CHRONOGOLF_PASSWORD")
-    if not email or not password:
-        print("❌ Set CHRONOGOLF_EMAIL and CHRONOGOLF_PASSWORD in backend/.env")
+
+    state_file = os.getenv("CHRONOGOLF_STATE", "chronogolf_state.json")
+    if not os.path.exists(state_file):
+        print(f"❌ No saved session ({state_file}).")
+        print("   Run this first to log in once:  python save_chronogolf_session.py")
         return 2
 
     headless = os.getenv("HEADLESS", "true").lower() != "false"
@@ -67,9 +68,10 @@ async def main() -> int:
             headless=headless, slow_mo=slow_mo,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
-        page = await browser.new_page()
+        context = await browser.new_context(storage_state=state_file)   # ← reuse saved login
+        page = await context.new_page()
         try:
-            await engine.login(page, email, password)
+            await engine.login(page)   # verifies the saved session
 
             slots = await engine.search_slots(
                 page, a.course, a.date, a.players,
