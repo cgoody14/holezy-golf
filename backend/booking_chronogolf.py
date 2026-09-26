@@ -1,412 +1,348 @@
 # =============================================================================
-# booking.py
+# booking_chronogolf.py  —  API-DRIVEN ENGINE (built from a real HAR capture)
 # =============================================================================
-# ChronoGolf Playwright booking engine for Holezy.
+# ChronoGolf / Lightspeed runs a clean JSON API under /marketplace. This engine
+# was reverse-engineered from a REAL, completed booking (ref 2Q0U-2B3K) captured
+# in a browser HAR, so the endpoints, payloads and field names below are what
+# ChronoGolf actually uses — not guesses.
 #
-# Three async functions consumed by scheduler.py:
+# Strategy: Playwright logs in (establishing the session cookie + CSRF token),
+# then every booking step is a direct JSON call via page.request, which inherits
+# the browser's cookies automatically. No brittle clicking through the UI.
 #
-#   login(page, email, password)
-#       Navigates ChronoGolf's login form. After this call the browser
-#       session is authenticated and page.request carries auth cookies.
+# The three functions scheduler.py already calls, unchanged:
+#   await login(page, email, password)
+#   slots = await search_slots(page, course_url, date, players, time_window)
+#   code  = await book_slot(page, slot)
 #
-#   search_slots(page, course_url, date, players, time_window)
-#       Calls ChronoGolf's widget API via page.request (inherits browser
-#       session). Returns a filtered list of available tee time slot dicts.
-#       Each slot includes _club_id and _player_count so it can be passed
-#       directly to book_slot without extra context.
+# ── THE REAL FLOW (confirmed from the HAR) ────────────────────────────────────
+#   1. login (UI)  → session cookie; then GET /marketplace/sessions for user id,
+#      and read <meta name="csrf-token"> for the CSRF token.
+#   2. GET  /marketplace/v2/teetimes?start_date=&course_ids=<uuid>&holes=18
+#          → { status, teetimes:[ { id, start_time, max_player_size,
+#                                   default_price:{ subtotal, player_type_id } } ] }
+#   3. POST /marketplace/reservations/options  { nb_holes, teetime_id,
+#          rounds_attributes:[{affiliation_type_id}×players], source, medium }
+#          → preview with club_id, club{}, rounds[].round_lines[] (product ids + price)
+#   4. POST /marketplace/reservations  { reservation:{ …, rounds_attributes[] } }
+#          with X-CSRF-Token header → 201 { id, booking_reference }
 #
-#   book_slot(page, slot)
-#       POSTs to ChronoGolf's reservation + confirm endpoints using the
-#       golfer's saved payment method. Returns a confirmation code string.
-#
-# Rules enforced throughout:
-#   - headless=True is set in scheduler.py (browser is created there)
-#   - Never time.sleep() — only page.wait_for_selector() or asyncio.sleep()
-#   - On any exception: take a screenshot to /tmp/, log, then re-raise
-#   - load_dotenv(find_dotenv()) at module level
+# ── PAYMENT ───────────────────────────────────────────────────────────────────
+# The captured course booked with force_online_payment=false — no card at
+# checkout (pay at the course). If a course returns force_online_payment=true,
+# this engine raises RequiresOnlinePayment so the caller can route it to the
+# Stripe-Issuing path (a later phase) instead of failing silently.
 # =============================================================================
 
 import json
-import re
-import asyncio
+import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv, find_dotenv
-from playwright.async_api import Page, Error as PlaywrightError
+from playwright.async_api import Page, TimeoutError as PWTimeout
 
 load_dotenv(find_dotenv())
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CONSTANTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-CHRONO_BASE = "https://www.chronogolf.com"
-LOGIN_URL   = f"{CHRONO_BASE}/users/sign_in"
-
-# Headers that mirror what ChronoGolf's own widget sends.
-# page.request automatically adds cookies/session on top of these.
-_API_HEADERS = {
-    "Accept":           "application/json, text/plain, */*",
-    "Content-Type":     "application/json",
-    "X-Requested-With": "XMLHttpRequest",
-    "Origin":           CHRONO_BASE,
-    "Referer":          f"{CHRONO_BASE}/",
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-}
-
+CHRONO_BASE    = "https://www.chronogolf.com"
+LOGIN_URL      = f"{CHRONO_BASE}/users/sign_in"
 SCREENSHOT_DIR = Path("/tmp")
 
-# Playwright selector tried in order for email/password fields.
-# ChronoGolf uses Devise (Rails), so standard Devise IDs are first.
-_EMAIL_SELECTORS = [
-    "#user_email",
-    "input[name='user[email]']",
-    "input[type='email']",
-]
-_PASSWORD_SELECTORS = [
-    "#user_password",
-    "input[name='user[password]']",
-    "input[type='password']",
-]
-_SUBMIT_SELECTORS = [
-    "input[type='submit']",
-    "button[type='submit']",
-]
+
+class RequiresOnlinePayment(Exception):
+    """Raised when a course forces online payment (needs the card/Issuing path)."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PRIVATE HELPERS
+# HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _extract_club_id(course_url: str) -> str:
-    """
-    Extract the ChronoGolf numeric club ID from a URL or bare ID string.
-
-    Accepted formats:
-      "1482"
-      "https://www.chronogolf.com/club/1482"
-      "https://www.chronogolf.com/club/rattlesnake-point/1482"
-
-    For slug-only URLs (no numeric ID), store the numeric club ID in the
-    scheduled_jobs.course_url column as:  https://www.chronogolf.com/club/{id}
-    """
-    s = str(course_url).strip()
-    if s.isdigit():
-        return s
-    match = re.search(r"/(?:club|clubs)/(\d+)", s)
-    if match:
-        return match.group(1)
-    raise ValueError(
-        f"Cannot extract numeric ChronoGolf club ID from '{course_url}'. "
-        "Store course_url as 'https://www.chronogolf.com/club/<numeric_id>' "
-        "in the scheduled_jobs table."
-    )
+def _mins(hhmm: str) -> int:
+    """'8:20' / '08:20' / '08:20:00' → minutes since midnight."""
+    parts = str(hhmm).strip().split(":")
+    return int(parts[0]) * 60 + int(parts[1])
 
 
-def _time_to_minutes(hhmm: str) -> int:
-    """'HH:MM' → minutes since midnight."""
-    h, m = map(int, hhmm.split(":"))
-    return h * 60 + m
-
-
-def _first_selector(selectors: list[str]) -> str:
-    """Return a comma-joined CSS selector string (Playwright tries each)."""
-    return ", ".join(selectors)
-
-
-async def _screenshot(page: Page, label: str) -> None:
-    """Capture a timestamped screenshot to /tmp/ for post-mortem debugging."""
-    ts   = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+async def _shot(page: Page, label: str) -> None:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     path = str(SCREENSHOT_DIR / f"holezy_{label}_{ts}.png")
     try:
         await page.screenshot(path=path, full_page=True)
-        print(f"[booking] Screenshot → {path}")
-    except Exception as ss_err:
-        print(f"[booking] Screenshot failed: {ss_err}")
+        print(f"[chronogolf]  📸 {path}")
+    except Exception as e:
+        print(f"[chronogolf]  (screenshot failed: {e})")
+
+
+def _api_headers(csrf: str | None = None) -> dict:
+    h = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": CHRONO_BASE,
+        "Referer": f"{CHRONO_BASE}/",
+    }
+    if csrf:
+        h["X-CSRF-Token"] = csrf
+    return h
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1.  LOGIN
+# 1 · LOGIN  (also captures user id + CSRF token onto the page object)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def login(page: Page, email: str, password: str) -> None:
     """
-    Navigate ChronoGolf's login form and authenticate.
-
-    After a successful call the browser page carries a valid session;
-    all subsequent page.request calls will include the auth cookies.
-
-    Raises RuntimeError on bad credentials or unexpected HTTP status.
-    Raises PlaywrightError / TimeoutError on navigation problems.
+    Log in through ChronoGolf's form, then cache the numeric user id and CSRF
+    token on the page (page._holezy) for the API calls that follow.
     """
+    print(f"[chronogolf] ① login → {LOGIN_URL}")
     try:
-        print(f"[booking] login → {LOGIN_URL}")
         await page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+        await page.fill("#user_email, input[name='user[email]'], input[type='email']", email)
+        await page.fill("#user_password, input[name='user[password]'], input[type='password']", password)
+        async with page.expect_navigation(wait_until="domcontentloaded", timeout=20_000):
+            await page.click("input[type='submit'], button[type='submit']")
 
-        # ── Fill email ────────────────────────────────────────────────────
-        email_sel = _first_selector(_EMAIL_SELECTORS)
-        await page.wait_for_selector(email_sel, timeout=10_000)
-        await page.fill(email_sel, email)
+        if "sign_in" in page.url:
+            await _shot(page, "login_failed")
+            raise RuntimeError("Login failed — still on sign_in page. Check credentials.")
 
-        # ── Fill password ─────────────────────────────────────────────────
-        pw_sel = _first_selector(_PASSWORD_SELECTORS)
-        await page.wait_for_selector(pw_sel, timeout=5_000)
-        await page.fill(pw_sel, password)
+        # Numeric user id (the booker) — GET /marketplace/sessions returns it.
+        sess = await page.request.get(f"{CHRONO_BASE}/marketplace/sessions", headers=_api_headers())
+        if not sess.ok:
+            raise RuntimeError(f"/marketplace/sessions → HTTP {sess.status}")
+        user = await sess.json()
+        user_id = user.get("id")
 
-        # ── Submit and capture the sign-in response ───────────────────────
-        # We intercept the POST response so we can inspect the status code
-        # without having to parse page state after redirect.
-        submit_sel = _first_selector(_SUBMIT_SELECTORS)
-        await page.wait_for_selector(submit_sel, timeout=5_000)
+        # CSRF token from the SPA's meta tag (Rails standard).
+        csrf = await page.evaluate(
+            "() => { const m = document.querySelector('meta[name=\"csrf-token\"]'); return m ? m.content : null; }"
+        )
 
-        async with page.expect_response(
-            lambda r: (
-                "sign_in" in r.url
-                and r.request.method in ("POST", "post")
-            ),
-            timeout=20_000,
-        ) as resp_info:
-            await page.click(submit_sel)
-
-        resp = await resp_info.value
-        if not resp.ok:
-            body = await resp.text()
-            raise RuntimeError(
-                f"ChronoGolf login failed (HTTP {resp.status}): {body[:300]}"
-            )
-
-        print(f"[booking] Authenticated as {email}")
-
+        page._holezy = {"user_id": user_id, "csrf": csrf,
+                        "name": f"{user.get('first_name','')} {user.get('last_name','')}".strip(),
+                        "email": user.get("email")}
+        print(f"[chronogolf]    ✅ signed in as {user.get('email')} (id={user_id}, csrf={'yes' if csrf else 'MISSING'})")
     except Exception:
-        await _screenshot(page, "login_error")
+        await _shot(page, "login_error")
         raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  SEARCH SLOTS
+# 2 · SEARCH SLOTS
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def search_slots(
     page: Page,
     course_url: str,
-    date: str,           # "YYYY-MM-DD"
+    date: str,                 # "YYYY-MM-DD"
     players: int,
-    time_window: dict,   # {"earliest": "HH:MM", "latest": "HH:MM"}
+    time_window: dict,         # {"earliest": "HH:MM", "latest": "HH:MM"}
 ) -> list[dict]:
     """
-    Fetch available tee times from ChronoGolf's widget API.
+    Return tee times in the window, earliest first. We let the course page make
+    its own /marketplace/v2/teetimes request (which resolves the course UUID for
+    us) and read the response — then fall back to a direct API call if needed.
 
-    Uses page.request so the browser's auth session (cookies) is included
-    automatically — no separate token management needed.
-
-    Returns a list of slot dicts filtered to the requested time window and
-    player count. Each slot dict has:
-        id, start_time, green_fee, available_spots, nb_holes, rate_type,
-        _club_id      (injected — needed by book_slot)
-        _player_count (injected — needed by book_slot)
-
-    Returns [] when the API is reachable but no matching slots exist.
-    Raises on network or unexpected parse errors.
+    Each returned slot carries everything book_slot needs:
+        teetime_id, start_label, affiliation_type_id, subtotal, _players, _holes
+    Returns [] when the API responds but nothing matches (→ retry later).
     """
+    earliest = time_window.get("earliest", "00:00")
+    latest   = time_window.get("latest", "23:59")
+    holes    = "18"
+
+    nav = f"{course_url}?date={date}&nb_holes={holes}"
+    print(f"[chronogolf] ② search → {nav}")
+
+    data = None
     try:
-        club_id = _extract_club_id(course_url)
-        url     = f"{CHRONO_BASE}/api/v1/clubs/{club_id}/tee_times"
-        params  = {
-            "date":       date,
-            "nb_holes":   "18",
-            "nb_players": str(players),
-        }
+        # Let the SPA fire its own teetimes call and capture the response — this
+        # avoids having to know the course UUID up front.
+        try:
+            async with page.expect_response(
+                lambda r: "/marketplace/v2/teetimes?" in r.url and r.status == 200,
+                timeout=20_000,
+            ) as resp_info:
+                await page.goto(nav, wait_until="domcontentloaded", timeout=30_000)
+            data = await (await resp_info.value).json()
+        except PWTimeout:
+            # Fallback: pull the course UUID out of the page and call the API directly.
+            uuid = await _course_uuid(page)
+            if not uuid:
+                await _shot(page, "no_course_uuid")
+                print("[chronogolf]    ⚠ could not resolve course UUID from page")
+                return []
+            url = (f"{CHRONO_BASE}/marketplace/v2/teetimes"
+                   f"?start_date={date}&course_ids={uuid}&holes=9%2C18&page=1")
+            resp = await page.request.get(url, headers=_api_headers())
+            if not resp.ok:
+                print(f"[chronogolf]    teetimes API → HTTP {resp.status}")
+                return []
+            data = await resp.json()
 
-        print(
-            f"[booking] search_slots club={club_id} "
-            f"date={date} players={players} window={time_window}"
-        )
-
-        resp = await page.request.get(
-            url,
-            params=params,
-            headers=_API_HEADERS,
-            timeout=15_000,
-        )
-
-        if not resp.ok:
-            body = await resp.text()
-            print(f"[booking] Tee times API → HTTP {resp.status}: {body[:300]}")
-            return []
-
-        raw = await resp.json()
-
-        # Normalise: ChronoGolf returns either a bare array or {tee_times: [...]}
-        if isinstance(raw, list):
-            slots_raw = raw
-        elif isinstance(raw, dict):
-            slots_raw = raw.get("tee_times") or raw.get("results") or []
-        else:
-            slots_raw = []
-
-        # ── Normalise field names ─────────────────────────────────────────
-        slots: list[dict] = []
-        for s in slots_raw:
-            slots.append({
-                "id":              str(s.get("id", "")),
-                "start_time":      (
-                    s.get("start_time")
-                    or s.get("datetime")
-                    or s.get("tee_time", "")
-                ),
-                "green_fee":       (
-                    s.get("green_fee_per_player")
-                    or s.get("price")
-                    or s.get("green_fee")
-                    or 0
-                ),
-                "available_spots": (
-                    s.get("available_spots")
-                    or s.get("nb_available_spots")
-                    or 4
-                ),
-                "nb_holes":        s.get("nb_holes") or 18,
-                "rate_type":       (
-                    s.get("rate_type")
-                    or (s.get("rate") or {}).get("name")
-                    or "standard"
-                ),
-                # Injected context so book_slot needs no extra arguments
-                "_club_id":        club_id,
-                "_player_count":   players,
-            })
-
-        # ── Filter by time window and available spots ─────────────────────
-        earliest_mins = _time_to_minutes(time_window.get("earliest", "00:00"))
-        latest_mins   = _time_to_minutes(time_window.get("latest",   "23:59"))
-
-        filtered: list[dict] = []
-        for slot in slots:
-            start = slot["start_time"]
-            if not start:
+        teetimes = (data or {}).get("teetimes") or []
+        lo, hi = _mins(earliest), _mins(latest)
+        slots = []
+        for t in teetimes:
+            st = t.get("start_time")
+            if not st:
                 continue
             try:
-                dt        = datetime.fromisoformat(start)
-                slot_mins = dt.hour * 60 + dt.minute
-            except (ValueError, TypeError):
+                m = _mins(st)
+            except (ValueError, IndexError):
                 continue
+            if not (lo <= m <= hi):
+                continue
+            if (t.get("max_player_size") or 4) < players:
+                continue
+            price = t.get("default_price") or {}
+            slots.append({
+                "teetime_id":         t.get("id"),
+                "start_label":        f"{m // 60:02d}:{m % 60:02d}",
+                "start_minutes":      m,
+                "affiliation_type_id": price.get("player_type_id"),
+                "subtotal":           price.get("subtotal"),
+                "_players":           players,
+                "_holes":             int(holes),
+            })
 
-            in_window    = earliest_mins <= slot_mins <= latest_mins
-            has_spots    = slot["available_spots"] >= players
-
-            if in_window and has_spots:
-                filtered.append(slot)
-
-        print(
-            f"[booking] {len(slots_raw)} raw slots → "
-            f"{len(filtered)} in window "
-            f"{time_window.get('earliest')}–{time_window.get('latest')}"
-        )
-        return filtered
+        slots.sort(key=lambda s: s["start_minutes"])
+        pretty = [f"{s['start_label']}(${s['subtotal']})" for s in slots]
+        print(f"[chronogolf]    {len(teetimes)} slot(s) → {len(slots)} in {earliest}-{latest}: {pretty or '—'}")
+        return slots
 
     except Exception:
-        await _screenshot(page, "search_slots_error")
+        await _shot(page, "search_error")
         raise
 
 
+async def _course_uuid(page: Page) -> str | None:
+    """Best-effort: read the ChronoGolf course UUID the SPA has loaded."""
+    try:
+        return await page.evaluate(
+            """() => {
+                const s = document.body.innerHTML.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+                return s ? s[0] : null;
+            }"""
+        )
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  BOOK SLOT
+# 3 · BOOK SLOT
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def book_slot(page: Page, slot: dict) -> str:
     """
-    Reserve and confirm a tee time slot via ChronoGolf's widget API.
-
-    Expects slot to have _club_id and _player_count (injected by search_slots).
-    Payment is processed using the golfer's saved card on their ChronoGolf
-    account — no card data is handled here.
-
-    Returns the confirmation code string on success.
-    Raises RuntimeError if the reservation or confirmation step fails.
+    Reserve `slot` for `_players` players. Returns the ChronoGolf booking
+    reference (e.g. "2Q0U-2B3K"). Raises RequiresOnlinePayment if the course
+    forces online payment; raises RuntimeError on any API failure.
     """
+    holezy      = getattr(page, "_holezy", {}) or {}
+    csrf        = holezy.get("csrf")
+    user_id     = holezy.get("user_id")
+    teetime_id  = slot["teetime_id"]
+    players     = slot["_players"]
+    holes       = slot.get("_holes", 18)
+    aff_id      = slot["affiliation_type_id"]
+    label       = slot.get("start_label", "?")
+    print(f"[chronogolf] ③ book {label} · {players} players · teetime={teetime_id}")
+
     try:
-        club_id      = slot["_club_id"]
-        player_count = slot["_player_count"]
-        slot_id      = slot["id"]
-        nb_holes     = slot.get("nb_holes", 18)
-        start_time   = slot.get("start_time", "unknown")
+        # ── Step A: reservation options → the exact line items + club info ────
+        options_body = {
+            "nb_holes": str(holes),
+            "rounds_attributes": [
+                {"affiliation_type_id": str(aff_id), "extras": [], "discounts": []}
+                for _ in range(players)
+            ],
+            "source": "chronogolf",
+            "medium": "profile",
+            "teetime_id": str(teetime_id),
+        }
+        opt_resp = await page.request.post(
+            f"{CHRONO_BASE}/marketplace/reservations/options",
+            data=json.dumps(options_body), headers=_api_headers(csrf), timeout=20_000,
+        )
+        if not opt_resp.ok:
+            body = await opt_resp.text()
+            raise RuntimeError(f"reservations/options → HTTP {opt_resp.status}: {body[:300]}")
+        preview = await opt_resp.json()
+        preview = preview[0] if isinstance(preview, list) else preview
 
-        print(f"[booking] book_slot {start_time} club={club_id} players={player_count}")
+        if preview.get("force_online_payment"):
+            raise RequiresOnlinePayment(
+                f"Course requires online payment for teetime {teetime_id} — route to the card path."
+            )
 
-        # ── Step 1: Create reservation (holds the slot) ───────────────────
-        reserve_url  = f"{CHRONO_BASE}/api/v1/clubs/{club_id}/reservations"
-        reserve_body = json.dumps({
+        club       = preview.get("club") or {}
+        club_id    = preview.get("club_id") or club.get("id")
+        rounds_in  = preview.get("rounds") or []
+        if not rounds_in:
+            raise RuntimeError("options returned no rounds — slot may be gone")
+
+        # ── Step B: build the reservation from the preview's line items ───────
+        rounds_attributes = []
+        for i, r in enumerate(rounds_in):
+            lines = []
+            for ln in (r.get("round_lines") or []):
+                lines.append({
+                    "id": None, "round_id": None, "discount_id": None,
+                    "discount_rule_id": None, "kit_id": None, "kit_reference": None,
+                    "product_id": ln.get("product_id"),
+                    "product_rule_id": ln.get("product_rule_id"),
+                    "original_unit_price": ln.get("original_unit_price", ln.get("unit_price")),
+                    "unit_price": ln.get("unit_price"),
+                    "quantity": ln.get("quantity", 1),
+                    "refunded_at": None, "refundable": False,
+                    "unit_quantity": ln.get("unit_quantity", 1),
+                })
+            rounds_attributes.append({
+                "id": None,
+                "affiliation_type_id": r.get("affiliation_type_id", aff_id),
+                "guest": None, "reservation_id": None, "state": "reserved",
+                "raincheck_issued_at": None,
+                "user_id": user_id if i == 0 else None,   # booker on the first round only
+                "cancelled_at": None, "requires_payment": r.get("requires_payment", True),
+                "check_in_medium": None, "check_in_kiosk_id": None, "checked_in_at": None,
+                "fully_refunded": False,
+                "round_lines_attributes": lines,
+            })
+
+        reservation = {
             "reservation": {
-                "tee_time_id": slot_id,
-                "nb_players":  player_count,
-                "nb_holes":    nb_holes,
+                "club_id": club_id, "teetime_id": teetime_id, "recurrence_id": None,
+                "state": "confirmed", "holes": holes,
+                "eligible_for_mobile_self_check_in": False, "made_online": True,
+                "origin_reservation_id": None, "created_user_id": None,
+                "reminder_chronodeal_chosen_at": None, "source": "chronogolf",
+                "online_note": None, "booking_reference": None, "confirmed_at": None,
+                "cancellable": True, "editable": True, "force_online_payment": False,
+                "discount_type": None,
+                "club": {"id": club_id, "name": club.get("name"),
+                         "currency_code": club.get("currency_code", "USD")},
+                "lottery_choices_attributes": None,
+                "rounds_attributes": rounds_attributes,
             }
-        })
+        }
 
+        # ── Step C: create the reservation ───────────────────────────────────
         res = await page.request.post(
-            reserve_url,
-            data=reserve_body,
-            headers=_API_HEADERS,
-            timeout=20_000,
+            f"{CHRONO_BASE}/marketplace/reservations",
+            data=json.dumps(reservation), headers=_api_headers(csrf), timeout=25_000,
         )
-
-        if not res.ok:
+        if res.status not in (200, 201):
             body = await res.text()
-            raise RuntimeError(
-                f"Reservation POST failed (HTTP {res.status}): {body[:400]}"
-            )
+            raise RuntimeError(f"reservations POST → HTTP {res.status}: {body[:400]}")
+        confirmed = await res.json()
+        ref = confirmed.get("booking_reference") or str(confirmed.get("id") or "")
+        print(f"[chronogolf]    ✅ BOOKED — reference {ref} (reservation {confirmed.get('id')})")
+        return ref
 
-        res_data       = await res.json()
-        reservation_id = (
-            res_data.get("id")
-            or (res_data.get("reservation") or {}).get("id")
-        )
-        if not reservation_id:
-            raise RuntimeError(
-                f"No reservation ID in response. Got keys: {list(res_data.keys())}"
-            )
-
-        print(f"[booking] Reservation created id={reservation_id} — confirming...")
-
-        # ── Step 2: Confirm and pay ───────────────────────────────────────
-        # ChronoGolf charges the golfer's saved card on their account.
-        confirm_url  = (
-            f"{CHRONO_BASE}/api/v1/clubs/{club_id}"
-            f"/reservations/{reservation_id}/confirm"
-        )
-        confirm_body = json.dumps({"payment_method": "saved_card"})
-
-        conf = await page.request.post(
-            confirm_url,
-            data=confirm_body,
-            headers=_API_HEADERS,
-            timeout=20_000,
-        )
-
-        if not conf.ok:
-            body = await conf.text()
-            raise RuntimeError(
-                f"Confirmation POST failed (HTTP {conf.status}): {body[:400]}"
-            )
-
-        conf_data = await conf.json()
-        code = (
-            conf_data.get("confirmation_number")
-            or conf_data.get("booking_number")
-            or (conf_data.get("reservation") or {}).get("confirmation_number")
-            or str(reservation_id)   # fallback: reservation ID as reference
-        )
-
-        print(f"[booking] Booked! Confirmation code: {code}")
-        return str(code)
-
+    except RequiresOnlinePayment:
+        raise
     except Exception:
-        await _screenshot(page, "book_slot_error")
+        await _shot(page, "book_error")
         raise

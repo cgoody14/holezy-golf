@@ -54,22 +54,15 @@ MAX_ATTEMPTS      = 20
 RETRY_SHORT_SECS  = 30   # between attempts 1–5
 RETRY_LONG_SECS   = 60   # between attempts 6–MAX_ATTEMPTS
 
-# Maps booking_platform value → booking module name
+# Maps booking_platform value → booking module name.
+# ChronoGolf-first: other platforms return in Phase 4, each as its own engine.
 BOOKING_ENGINES = {
     "chronogolf": "booking_chronogolf",
-    "golfnow":    "booking_golfnow",
-    "teeoff":     "booking_teeoff",
-    "fore":       "booking_fore",
-    "supreme":    "booking_supreme",
 }
 
 # Maps platform → (email_env_var, password_env_var)
 PLATFORM_CREDS = {
     "chronogolf": ("CHRONOGOLF_EMAIL", "CHRONOGOLF_PASSWORD"),
-    "golfnow":    ("GOLFNOW_EMAIL",    "GOLFNOW_PASSWORD"),
-    "teeoff":     ("TEEOFF_EMAIL",     "TEEOFF_PASSWORD"),
-    "fore":       ("FORE_EMAIL",       "FORE_PASSWORD"),
-    "supreme":    ("SUPREME_EMAIL",    "SUPREME_PASSWORD"),
 }
 
 
@@ -185,7 +178,8 @@ async def scrape_until_found(booking_id: str) -> None:
         print(f"[scheduler] Using engine: {module_name}")
 
     # ── Resolve platform credentials from env vars ────────────────────────
-    email_var, pw_var = PLATFORM_CREDS[platform]
+    # Default to ChronoGolf creds for custom-adapter jobs on any platform.
+    email_var, pw_var = PLATFORM_CREDS.get(platform, PLATFORM_CREDS["chronogolf"])
     cg_email    = os.environ.get(email_var, "")
     cg_password = os.environ.get(pw_var, "")
 

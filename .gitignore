@@ -32,3 +32,9 @@ dist-ssr
 # Booking worker
 booking-worker/node_modules/
 booking-worker/dist/
+
+# Python (backend/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/

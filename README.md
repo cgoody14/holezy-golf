@@ -1,63 +1,58 @@
 # Holezy Golf
 
-Automated tee time booking — golfers submit their preferences once, Holezy books the moment the window opens.
+Automated tee time booking — golfers submit their preferences once, Holezy books the moment the course's booking window opens.
 
 ## What is this?
 
-Holezy monitors golf course booking windows and automatically reserves tee times the instant they become available. No more midnight alarms, no more F5 refreshing. Golfers connect their ChronoGolf (and soon GolfNow / foreUP) account, submit their preferences, and we handle the rest.
+Golfers pick a course, date, time window, and player count on the site. Holezy queues the request and, when the booking window opens, a worker attempts the reservation automatically on the golfer's behalf. No midnight alarms, no refreshing.
 
-## Repo Structure
+**Current coverage: ChronoGolf / Lightspeed.** Other platforms (GolfNow, foreUP, etc.) are deliberately out of scope until the ChronoGolf path is proven end to end.
+
+## Architecture
+
+Three deployables, one Supabase database. A booking flows: **site → edge function → `scheduled_jobs` table → worker → ChronoGolf**.
 
 ```
 holezy-golf/
-├── src/                        # React/Vite frontend (Lovable)
-│   ├── pages/                  # Route pages
-│   ├── components/             # UI components
-│   └── integrations/supabase/  # Supabase client + types
+├── src/                         # React + Vite frontend  → deployed on Vercel
+│   ├── pages/                   # Route pages (Checkout, BookingForm, Courses, …)
+│   ├── components/              # UI components (shadcn/ui)
+│   └── integrations/supabase/   # Supabase client + generated types
 │
-├── booking-worker/             # Railway booking engine (Node.js)
-│   ├── src/
-│   │   ├── adapters/           # Platform adapters
-│   │   │   ├── chronogolf.ts   # 13,730 courses
-│   │   │   └── custom/         # Playwright one-off scripts
-│   │   ├── scheduler.ts        # Polls scheduled_bookings every 60s
-│   │   ├── router.ts           # Routes to correct adapter
-│   │   ├── notifications.ts    # Twilio SMS + Resend email
-│   │   └── scripts/            # One-time ingestion scripts
-│   └── Dockerfile              # Railway deployment
+├── backend/                     # Python booking worker → deployed on Railway
+│   ├── worker.py                # Polls scheduled_jobs every 30s, claims + dispatches
+│   ├── scheduler.py             # Retry engine (≤20 attempts, no-availability vs error)
+│   ├── booking_chronogolf.py    # ChronoGolf booking engine (Playwright, UI-driven)
+│   ├── test_book_chronogolf.py  # Manual harness to test the engine against a course
+│   ├── notifications.py         # Resend email / Twilio SMS on outcome
+│   ├── courses/                 # Per-course custom adapter system (registry + base)
+│   ├── scrapers/                # ChronoGolf course-directory scraper
+│   └── railway.json, Procfile   # Railway deploy config
 │
-├── supabase/
-│   ├── functions/              # Edge functions (payments, email, etc.)
-│   └── migrations/
-│       ├── *.sql               # Site migrations (Lovable generated)
-│       └── booking-system/     # Booking engine migrations
-│           ├── 001_booking_system_schema.sql
-│           ├── 002_chronogolf_credentials.sql
-│           └── 003_courses_scheduler.sql
-│
-└── .env.example                # All required env vars documented
+└── supabase/
+    ├── functions/               # Edge functions — the site calls these live
+    │   ├── create-scheduled-job #   queues a booking into scheduled_jobs
+    │   ├── create-payment-intent#   Stripe: authorize now, capture on success
+    │   ├── cancel-booking        #  cancel job + release/refund the Stripe auth
+    │   └── …                     #  coupons, contact, admin, confirmations
+    └── migrations/              # Postgres schema (Supabase)
 ```
 
-## Platform Coverage
+## How the money works
 
-| Platform | Courses | Status |
-|----------|---------|--------|
-| ChronoGolf / Lightspeed | 13,730 | ✅ Active |
-| GolfNow | ~9,000 | 🔜 API approval pending |
-| foreUP | ~2,300 | 🔜 API approval pending |
-| Custom (Playwright) | Any | ✅ Add per course |
+- **Customer → Holezy:** Stripe, authorize at checkout, capture on a confirmed booking, release/refund if it can't book.
+- **Holezy → course:** never the customer's card. Either "pay at the course," or Holezy's own card-to-hold for courses that require a card. See the system map for the full model.
 
-## Tech Stack
+> ⚠️ **Known gap (in progress):** the worker does not yet capture/refund Stripe automatically on booking outcome — that wiring is a tracked overhaul phase.
 
-**Frontend** — React, Vite, TypeScript, Tailwind, shadcn/ui, Supabase Auth
+## Tech stack
 
-**Booking Worker** — Node.js, TypeScript, Supabase, deployed on Railway
+- **Frontend** — React, Vite, TypeScript, Tailwind, shadcn/ui, Supabase Auth (Vercel)
+- **Worker** — Python, Playwright, Supabase (Railway)
+- **Database / auth / functions** — Supabase (Postgres + Edge Functions)
+- **Payments** — Stripe · **Notifications** — Resend (email) + Twilio (SMS)
 
-**Database** — Supabase (Postgres + Realtime + Edge Functions)
-
-**Notifications** — Twilio (SMS) + Resend (email)
-
-## Getting Started
+## Getting started
 
 ### Frontend
 ```bash
@@ -65,26 +60,30 @@ npm install
 npm run dev
 ```
 
-### Booking Worker
+### Booking worker
 ```bash
-cd booking-worker
-npm install
-cp ../.env.example .env.local   # fill in values
-npm run dev
+cd backend
+pip install -r requirements.txt
+playwright install chromium
+cp .env.example .env          # fill in CHRONOGOLF_EMAIL/PASSWORD, SUPABASE_*, etc.
+python worker.py
 ```
 
-### Run ChronoGolf course ingestion (~25 min, one-time)
+### Test the ChronoGolf engine against a real course
 ```bash
-cd booking-worker
-SUPABASE_URL=... SUPABASE_SERVICE_KEY=... npm run ingest:chronogolf
+cd backend
+HEADLESS=false python test_book_chronogolf.py \
+  --course "https://www.chronogolf.com/club/<slug>" \
+  --date 2026-09-18 --earliest 10:00 --latest 11:45 --players 4 --dry-run
+```
+`--dry-run` finds and selects a slot but stops before booking anything.
+
+### Deploy the worker to Railway
+```bash
+cd backend
+railway up
 ```
 
-### Deploy worker to Railway
-```bash
-cd booking-worker
-railway login && railway init && railway up
-```
+## Environment variables
 
-## Environment Variables
-
-See `.env.example` for all required variables. Never commit `.env`.
+See `.env.example`. Never commit `.env` — secrets belong in Vercel, Railway, and Supabase dashboards, not in git.
