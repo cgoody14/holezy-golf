@@ -34,6 +34,7 @@
 # Stripe-Issuing path (a later phase) instead of failing silently.
 # =============================================================================
 
+import asyncio
 import json
 import os
 from datetime import datetime, timezone
@@ -235,18 +236,19 @@ async def search_slots(
         pretty = [f"{s['start_label']}(${s['subtotal']})" for s in slots]
         print(f"[chronogolf]    {len(teetimes)} slot(s) → {len(slots)} in {earliest}-{latest}: {pretty or '—'}")
 
-        # Let late XHRs settle, then read the CSRF token off any captured request.
-        try:
-            await page.wait_for_load_state("networkidle", timeout=8_000)
-        except Exception:
-            pass
+        # Brief settle for a couple more XHRs (NOT networkidle — this SPA never idles).
+        await asyncio.sleep(2)
 
-        csrf = None
+        # Read the CSRF token off any captured API request (full headers).
+        csrf, checked = None, 0
         for r in seen_reqs:
+            if "/marketplace" not in r.url and "/private_api" not in r.url:
+                continue
             try:
                 h = await r.all_headers()
             except Exception:
                 continue
+            checked += 1
             if h.get("x-csrf-token"):
                 csrf = h["x-csrf-token"]
                 break
@@ -255,23 +257,23 @@ async def search_slots(
                 page._holezy["csrf"] = csrf
             except Exception:
                 pass
-        print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf else 'NOT captured ⚠'}")
+        print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf else 'NOT captured ⚠'} "
+              f"(checked {checked} api requests)")
 
-        if not csrf:
-            # Diagnostic: show where the token might live so we can adjust.
-            try:
-                metas = await page.evaluate(
-                    "() => Array.from(document.querySelectorAll('meta')).map(m => (m.name||m.getAttribute('property')||'?') + '=' + (m.content||'').slice(0,24))"
-                )
-                print(f"[chronogolf]    (debug) meta tags: {metas}")
-            except Exception:
-                pass
-            try:
-                api_hits = [r.url.split('chronogolf.com')[-1][:60] for r in seen_reqs
-                            if '/marketplace' in r.url or '/private_api' in r.url][:12]
-                print(f"[chronogolf]    (debug) api requests seen: {api_hits}")
-            except Exception:
-                pass
+        # Always print diagnostics this run so we can pinpoint the token source.
+        try:
+            metas = await page.evaluate(
+                "() => Array.from(document.querySelectorAll('meta')).map(m => (m.name||m.getAttribute('property')||'?') + '=' + (m.content||'').slice(0,24))"
+            )
+            print(f"[chronogolf]    (debug) meta tags: {metas}")
+        except Exception as e:
+            print(f"[chronogolf]    (debug) meta read failed: {e}")
+        try:
+            api_hits = [r.url.split('chronogolf.com')[-1][:55] for r in seen_reqs
+                        if '/marketplace' in r.url or '/private_api' in r.url][:14]
+            print(f"[chronogolf]    (debug) api requests seen: {api_hits}")
+        except Exception:
+            pass
 
         return slots
 
