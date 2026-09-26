@@ -133,7 +133,8 @@ async def login(page: Page, email: str = "", password: str = "") -> None:
         page._holezy = {"user_id": user_id, "csrf": csrf,
                         "name": f"{user.get('first_name','')} {user.get('last_name','')}".strip(),
                         "email": user.get("email")}
-        print(f"[chronogolf]    ✅ session OK — {user.get('email')} (id={user_id}, csrf={'yes' if csrf else 'MISSING'})")
+        print(f"[chronogolf]    ✅ session OK — {user.get('email')} (id={user_id})")
+        # CSRF is captured from live API requests during search_slots (below).
     except SessionExpired:
         raise
     except Exception:
@@ -167,6 +168,17 @@ async def search_slots(
 
     nav = f"{course_url}?date={date}&nb_holes={holes}"
     print(f"[chronogolf] ② search → {nav}")
+
+    # Capture the CSRF token from the app's own API requests as the page loads.
+    # ChronoGolf sends X-CSRF-Token on every XHR, so we read it off a real one
+    # instead of guessing where it's stored — book_slot needs it for the POSTs.
+    csrf_box: dict = {}
+    def _grab_csrf(req):
+        if not csrf_box.get("t"):
+            t = req.headers.get("x-csrf-token")
+            if t:
+                csrf_box["t"] = t
+    page.on("request", _grab_csrf)
 
     data = None
     try:
@@ -223,11 +235,24 @@ async def search_slots(
         slots.sort(key=lambda s: s["start_minutes"])
         pretty = [f"{s['start_label']}(${s['subtotal']})" for s in slots]
         print(f"[chronogolf]    {len(teetimes)} slot(s) → {len(slots)} in {earliest}-{latest}: {pretty or '—'}")
+
+        # Stash the CSRF token captured during load so book_slot can POST.
+        if csrf_box.get("t"):
+            try:
+                page._holezy["csrf"] = csrf_box["t"]
+            except Exception:
+                pass
+        print(f"[chronogolf]    csrf for booking: {'captured ✅' if csrf_box.get('t') else 'NOT captured ⚠'}")
         return slots
 
     except Exception:
         await _shot(page, "search_error")
         raise
+    finally:
+        try:
+            page.remove_listener("request", _grab_csrf)
+        except Exception:
+            pass
 
 
 async def _course_uuid(page: Page) -> str | None:
@@ -262,6 +287,11 @@ async def book_slot(page: Page, slot: dict) -> str:
     aff_id      = slot["affiliation_type_id"]
     label       = slot.get("start_label", "?")
     print(f"[chronogolf] ③ book {label} · {players} players · teetime={teetime_id}")
+
+    if not csrf:
+        raise RuntimeError(
+            "No CSRF token — call search_slots first (it captures the token from ChronoGolf's API)."
+        )
 
     try:
         # ── Step A: reservation options → the exact line items + club info ────
