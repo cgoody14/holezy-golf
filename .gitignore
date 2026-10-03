@@ -46,3 +46,9 @@ backend/chronogolf_state.json
 # Raw cookie export (sensitive — never commit)
 cookies.json
 backend/cookies.json
+
+# Supabase CLI local state
+supabase/.temp/
+
+# Local MCP server config (user-specific tooling, not project config)
+.mcp.json

@@ -37,6 +37,7 @@ import os
 import traceback
 from datetime import datetime, timezone
 
+import requests
 from dotenv import load_dotenv, find_dotenv
 from supabase import create_client
 
@@ -87,6 +88,37 @@ def _update_job(job_id: str, fields: dict) -> None:
     _db().table("scheduled_jobs").update(
         {**fields, "updated_at": _now()}
     ).eq("id", job_id).execute()
+
+
+def _settle_payment(job_id: str, outcome: str) -> None:
+    """
+    Tell settle-booking-payment to capture (outcome="booked") or
+    release/refund (outcome="failed") the customer's Stripe authorization.
+
+    Best-effort: logs on failure but never raises, since a payment-settlement
+    hiccup shouldn't take down the booking job itself.
+    """
+    try:
+        service_key = os.environ["SUPABASE_SERVICE_KEY"]
+        resp = requests.post(
+            f"{os.environ['SUPABASE_URL']}/functions/v1/settle-booking-payment",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+            },
+            json={"job_id": job_id, "outcome": outcome},
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            print(
+                f"[scheduler] settle-booking-payment failed for job={job_id} "
+                f"outcome={outcome}: {resp.status_code} {resp.text[:300]}"
+            )
+        else:
+            print(f"[scheduler] settle-booking-payment ok for job={job_id} outcome={outcome}")
+    except Exception:
+        print(f"[scheduler] settle-booking-payment errored for job={job_id} outcome={outcome}")
+        traceback.print_exc()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +317,7 @@ async def scrape_until_found(booking_id: str) -> None:
                     "confirmation_code": confirm_code,
                     "last_error":        None,
                 })
+                _settle_payment(job_id, "booked")
 
                 # 6. Notify golfer
                 enriched = {
@@ -323,6 +356,7 @@ async def scrape_until_found(booking_id: str) -> None:
         # ── All attempts exhausted ────────────────────────────────────────
         print(f"[scheduler] FAILED — exhausted {MAX_ATTEMPTS} attempts for job {job_id}")
         _update_job(job_id, {"status": "failed"})
+        _settle_payment(job_id, "failed")
         await notifications.send_failure(job)
 
     except Exception:
@@ -332,6 +366,7 @@ async def scrape_until_found(booking_id: str) -> None:
                 "status":     "failed",
                 "last_error": "Browser/setup error — see worker logs",
             })
+            _settle_payment(job_id, "failed")
             await notifications.send_failure(job)
         except Exception:
             traceback.print_exc()
