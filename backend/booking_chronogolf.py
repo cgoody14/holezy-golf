@@ -103,46 +103,92 @@ _CSRF_META_RE = re.compile(
     r'name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']', re.I
 )
 
+# Token patterns for the Next.js __NEXT_DATA__ blob / inline scripts / HTML meta.
+_CSRF_SCAN_RES = [
+    _CSRF_META_RE,
+    re.compile(r'"(?:csrfToken|csrf_token|authenticityToken|authenticity_token)"\s*:\s*"([A-Za-z0-9_\-+/]{20,}={0,2})"'),
+    re.compile(r'(?:csrf[_-]?token|authenticity_token)\s*[:=]\s*["\']([A-Za-z0-9_\-+/]{20,}={0,2})["\']', re.I),
+]
+
 
 async def _fetch_csrf(page: Page, course_url: str) -> str | None:
     """
     Get the Rails CSRF token the booking POSTs require.
 
-    The token is NOT on the Next.js tee-sheet page (that page has no csrf meta).
-    It lives on the legacy /club/<slug>/booking/ checkout page — that is exactly
-    the Referer ChronoGolf itself sends on the reservation POSTs. We load that
-    page and read <meta name="csrf-token">. Try the raw server-rendered HTML
-    first (Rails renders the meta into the document — fast, no JS), then fall
-    back to the rendered DOM in case a client injects it.
+    It is NOT on the Next.js tee-sheet page, and not a <meta> tag either. In the
+    real booking flow the token rides the legacy /marketplace/* requests the
+    /club/<slug>/booking/ checkout page fires (that page is the Referer on the
+    reservation POSTs). So we load that page and, in order:
+        1) sniff the live /marketplace/* request headers for X-CSRF-Token,
+        2) read <meta name="csrf-token"> if present,
+        3) scan the rendered HTML / __NEXT_DATA__ for a csrf/authenticity token.
+    If all three miss, print diagnostics so we can see exactly where it lives.
     """
     base = course_url.split("?")[0].rstrip("/")
     booking_url = f"{base}/booking/?source=chronogolf&medium=profile"
 
-    # 1) Raw server-rendered HTML — the token is a meta tag in the document.
+    seen: list = []
+    def _collect(req):
+        if "/marketplace/" in req.url and "/marketplace/v2/" not in req.url:
+            seen.append(req)
+    page.on("request", _collect)
     try:
-        resp = await page.request.get(booking_url, headers={"Accept": "text/html"})
-        if resp.ok:
-            m = _CSRF_META_RE.search(await resp.text())
-            if m:
-                return m.group(1)
-    except Exception:
-        pass
+        try:
+            await page.goto(booking_url, wait_until="domcontentloaded", timeout=30_000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(3500)   # let the booking shell fire its XHRs
 
-    # 2) Rendered DOM fallback (client-injected meta).
-    try:
-        await page.goto(booking_url, wait_until="domcontentloaded", timeout=30_000)
-        tok = await page.evaluate(
-            "() => { const m = document.querySelector('meta[name=\"csrf-token\"]');"
-            " return m ? m.content : null; }"
-        )
-        if tok:
-            return tok
-        m = _CSRF_META_RE.search(await page.content())
-        if m:
-            return m.group(1)
-    except Exception:
-        pass
-    return None
+        # 1) Token off a live request header (how the browser itself sends it).
+        for r in seen:
+            try:
+                h = await r.all_headers()
+            except Exception:
+                continue
+            if h.get("x-csrf-token"):
+                return h["x-csrf-token"]
+
+        # 2) <meta name="csrf-token">
+        try:
+            tok = await page.evaluate(
+                "() => { const m = document.querySelector('meta[name=\"csrf-token\"]');"
+                " return m ? m.content : null; }"
+            )
+            if tok:
+                return tok
+        except Exception:
+            pass
+
+        # 3) Scan the full rendered HTML (includes __NEXT_DATA__ + inline scripts).
+        try:
+            html = await page.content()
+            for rx in _CSRF_SCAN_RES:
+                m = rx.search(html)
+                if m:
+                    return m.group(1)
+        except Exception:
+            html = ""
+
+        # Nothing worked — emit diagnostics to pinpoint the token source.
+        try:
+            metas = await page.evaluate(
+                "() => Array.from(document.querySelectorAll('meta'))"
+                ".map(m => m.name || m.getAttribute('property')).filter(Boolean)"
+            )
+            xhrs = [r.url.split('chronogolf.com')[-1][:48] for r in seen][:20]
+            csrf_ct = len(re.findall(r'csrf', html, re.I)) if html else 0
+            print(f"[chronogolf]    (csrf debug) landed on: {page.url}")
+            print(f"[chronogolf]    (csrf debug) meta names: {metas}")
+            print(f"[chronogolf]    (csrf debug) marketplace XHRs ({len(seen)}): {xhrs}")
+            print(f"[chronogolf]    (csrf debug) 'csrf' appears {csrf_ct}× in page HTML")
+        except Exception as e:
+            print(f"[chronogolf]    (csrf debug) failed: {e}")
+        return None
+    finally:
+        try:
+            page.remove_listener("request", _collect)
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
