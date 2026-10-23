@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sys
 
 STATE_FILE  = os.getenv("CHRONOGOLF_STATE", "chronogolf_state.json")
@@ -43,6 +44,25 @@ _SAMESITE = {
 }
 
 
+def _clean_domain(d: str) -> str:
+    """
+    Normalize a cookie domain. Cookie-Editor exports a plain hostname
+    (".chronogolf.com" / "www.chronogolf.com"), but if the JSON was pasted
+    through a tool that auto-links URLs, a value can arrive mangled as
+    "[www.chronogolf.com](https://www.chronogolf.com)". Pull the real host
+    back out so the session cookie still matches the site.
+    """
+    if not d:
+        return ".chronogolf.com"
+    d = d.strip()
+    if "](" in d:  # markdown-link artifact
+        lead = "." if d.startswith(".") else ""
+        m = re.search(r"\[([^\]]+)\]", d)
+        if m:
+            d = lead + m.group(1).lstrip(".")
+    return d
+
+
 def _to_storage_state(raw_cookies: list) -> dict:
     """Convert a Cookie-Editor JSON export into a Playwright storage_state dict."""
     cookies = []
@@ -50,7 +70,7 @@ def _to_storage_state(raw_cookies: list) -> dict:
         name = c.get("name")
         if not name:
             continue
-        domain = c.get("domain") or ".chronogolf.com"
+        domain = _clean_domain(c.get("domain") or ".chronogolf.com")
         cookie = {
             "name": name,
             "value": c.get("value", ""),
