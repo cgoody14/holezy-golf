@@ -34,6 +34,8 @@
 # Stripe-Issuing path (a later phase) instead of failing silently.
 # =============================================================================
 
+from __future__ import annotations
+
 import json
 import os
 import re

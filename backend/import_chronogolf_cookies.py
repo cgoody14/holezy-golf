@@ -25,6 +25,8 @@
 # Re-do this whenever the engine says "SessionExpired" (sessions last a while).
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
