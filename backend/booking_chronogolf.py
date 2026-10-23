@@ -411,6 +411,14 @@ async def book_slot(page: Page, slot: dict) -> str:
         preview = await opt_resp.json()
         preview = preview[0] if isinstance(preview, list) else preview
 
+        # Keep the raw preview so we can mirror the exact shape the server expects.
+        try:
+            SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+            with open(SCREENSHOT_DIR / "last_options_preview.json", "w") as f:
+                json.dump(preview, f, indent=2)
+        except Exception:
+            pass
+
         if preview.get("force_online_payment"):
             raise RequiresOnlinePayment(
                 f"Course requires online payment for teetime {teetime_id} — route to the card path."
@@ -468,12 +476,29 @@ async def book_slot(page: Page, slot: dict) -> str:
         }
 
         # ── Step C: create the reservation ───────────────────────────────────
+        try:
+            with open(SCREENSHOT_DIR / "last_reservation_sent.json", "w") as f:
+                json.dump(reservation, f, indent=2)
+        except Exception:
+            pass
         res = await page.request.post(
             f"{CHRONO_BASE}/marketplace/reservations",
             data=json.dumps(reservation), headers=_api_headers(csrf), timeout=25_000,
         )
         if res.status not in (200, 201):
             body = await res.text()
+            # Dump what we sent vs. what the server returned so we can fix the shape.
+            print("[chronogolf]  ── BOOK DEBUG ─────────────────────────────")
+            print(f"[chronogolf]  reservations POST → HTTP {res.status}")
+            print(f"[chronogolf]  server said: {body[:400]}")
+            print(f"[chronogolf]  preview top-level keys: {list(preview.keys())}")
+            r0 = (rounds_in[0] if rounds_in else {}) or {}
+            print(f"[chronogolf]  preview round[0] keys: {list(r0.keys())}")
+            l0 = ((r0.get('round_lines') or [{}])[0]) or {}
+            print(f"[chronogolf]  preview round[0].round_lines[0] keys: {list(l0.keys())}")
+            print(f"[chronogolf]  saved: {SCREENSHOT_DIR}/last_options_preview.json")
+            print(f"[chronogolf]         {SCREENSHOT_DIR}/last_reservation_sent.json")
+            print("[chronogolf]  ───────────────────────────────────────────")
             raise RuntimeError(f"reservations POST → HTTP {res.status}: {body[:400]}")
         confirmed = await res.json()
         ref = confirmed.get("booking_reference") or str(confirmed.get("id") or "")
