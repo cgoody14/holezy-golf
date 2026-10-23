@@ -49,7 +49,10 @@ load_dotenv(find_dotenv())
 
 CHRONO_BASE    = "https://www.chronogolf.com"
 LOGIN_URL      = f"{CHRONO_BASE}/users/sign_in"
-SCREENSHOT_DIR = Path("/tmp")
+# Screenshots land next to the engine in backend/screenshots/ (easy to find in
+# Finder), overridable with HOLEZY_SHOT_DIR. Falls back to /tmp if that can't be
+# created (e.g. read-only deploy).
+SCREENSHOT_DIR = Path(os.getenv("HOLEZY_SHOT_DIR", Path(__file__).resolve().parent / "screenshots"))
 
 # ChronoGolf gates its login form with a CAPTCHA, so a bot can't log in from
 # scratch. Instead a human logs in once (save_chronogolf_session.py) and the
@@ -78,7 +81,11 @@ def _mins(hhmm: str) -> int:
 
 async def _shot(page: Page, label: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    path = str(SCREENSHOT_DIR / f"holezy_{label}_{ts}.png")
+    try:
+        SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        path = str(SCREENSHOT_DIR / f"holezy_{label}_{ts}.png")
+    except Exception:
+        path = f"/tmp/holezy_{label}_{ts}.png"   # fallback if dir isn't writable
     try:
         await page.screenshot(path=path, full_page=True)
         print(f"[chronogolf]  📸 {path}")

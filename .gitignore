@@ -46,3 +46,6 @@ backend/chronogolf_state.json
 # Raw cookie export (sensitive — never commit)
 cookies.json
 backend/cookies.json
+
+# Engine debug screenshots
+backend/screenshots/
