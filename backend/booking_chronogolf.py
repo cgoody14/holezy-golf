@@ -363,6 +363,33 @@ async def _course_uuid(page: Page) -> str | None:
 # 3 · BOOK SLOT
 # ─────────────────────────────────────────────────────────────────────────────
 
+async def _confirm_booking(page: Page, user_id, teetime_id) -> dict | None:
+    """
+    ChronoGolf's reservation POST returns a 500 even when the booking actually
+    committed, so confirm it landed by looking it up in the user's reservations
+    and matching on teetime_id. Returns the reservation dict, or None if not
+    found (genuinely uncertain — caller must NOT assume success).
+    """
+    for pg in (1, 2, 3):
+        try:
+            r = await page.request.get(
+                f"{CHRONO_BASE}/marketplace/users/{user_id}/reservations?page={pg}",
+                headers=_api_headers(), timeout=15_000,
+            )
+            if not r.ok:
+                break
+            items = await r.json()
+        except Exception:
+            break
+        if not isinstance(items, list) or not items:
+            break
+        for it in items:
+            if str(it.get("teetime_id")) == str(teetime_id) and \
+               (it.get("state") in (None, "confirmed", "reserved")):
+                return it
+    return None
+
+
 async def book_slot(page: Page, slot: dict) -> str:
     """
     Reserve `slot` for `_players` players. Returns the ChronoGolf booking
@@ -485,25 +512,42 @@ async def book_slot(page: Page, slot: dict) -> str:
             f"{CHRONO_BASE}/marketplace/reservations",
             data=json.dumps(reservation), headers=_api_headers(csrf), timeout=25_000,
         )
-        if res.status not in (200, 201):
-            body = await res.text()
-            # Dump what we sent vs. what the server returned so we can fix the shape.
-            print("[chronogolf]  ── BOOK DEBUG ─────────────────────────────")
-            print(f"[chronogolf]  reservations POST → HTTP {res.status}")
-            print(f"[chronogolf]  server said: {body[:400]}")
-            print(f"[chronogolf]  preview top-level keys: {list(preview.keys())}")
-            r0 = (rounds_in[0] if rounds_in else {}) or {}
-            print(f"[chronogolf]  preview round[0] keys: {list(r0.keys())}")
-            l0 = ((r0.get('round_lines') or [{}])[0]) or {}
-            print(f"[chronogolf]  preview round[0].round_lines[0] keys: {list(l0.keys())}")
-            print(f"[chronogolf]  saved: {SCREENSHOT_DIR}/last_options_preview.json")
-            print(f"[chronogolf]         {SCREENSHOT_DIR}/last_reservation_sent.json")
-            print("[chronogolf]  ───────────────────────────────────────────")
-            raise RuntimeError(f"reservations POST → HTTP {res.status}: {body[:400]}")
-        confirmed = await res.json()
-        ref = confirmed.get("booking_reference") or str(confirmed.get("id") or "")
-        print(f"[chronogolf]    ✅ BOOKED — reference {ref} (reservation {confirmed.get('id')})")
-        return ref
+
+        # Happy path: a clean 200/201 with the booking reference.
+        if res.status in (200, 201):
+            confirmed = await res.json()
+            ref = confirmed.get("booking_reference") or str(confirmed.get("id") or "")
+            if ref:
+                print(f"[chronogolf]    ✅ BOOKED — reference {ref} (reservation {confirmed.get('id')})")
+                return ref
+
+        # ChronoGolf often commits the booking but returns a 500 (it crashes on a
+        # post-booking step). Don't trust the status — confirm by looking the
+        # reservation up and return its real reference.
+        body = await res.text()
+        print(f"[chronogolf]    reservations POST → HTTP {res.status}; verifying booking landed…")
+        booked = await _confirm_booking(page, user_id, teetime_id)
+        if booked:
+            ref = booked.get("booking_reference") or str(booked.get("id") or "")
+            print(f"[chronogolf]    ✅ BOOKED (confirmed via lookup) — reference {ref} "
+                  f"(reservation {booked.get('id')}, state {booked.get('state')})")
+            return ref
+
+        # Genuinely failed — the booking is not in the account. Dump diagnostics.
+        print("[chronogolf]  ── BOOK DEBUG ─────────────────────────────")
+        print(f"[chronogolf]  reservations POST → HTTP {res.status}")
+        print(f"[chronogolf]  server said: {body[:400]}")
+        print(f"[chronogolf]  preview top-level keys: {list(preview.keys())}")
+        r0 = (rounds_in[0] if rounds_in else {}) or {}
+        print(f"[chronogolf]  preview round[0] keys: {list(r0.keys())}")
+        l0 = ((r0.get('round_lines') or [{}])[0]) or {}
+        print(f"[chronogolf]  preview round[0].round_lines[0] keys: {list(l0.keys())}")
+        print(f"[chronogolf]  saved: {SCREENSHOT_DIR}/last_options_preview.json")
+        print(f"[chronogolf]         {SCREENSHOT_DIR}/last_reservation_sent.json")
+        print("[chronogolf]  ───────────────────────────────────────────")
+        raise RuntimeError(
+            f"reservations POST → HTTP {res.status} and no matching booking found: {body[:300]}"
+        )
 
     except RequiresOnlinePayment:
         raise
