@@ -23,6 +23,9 @@ serve(async (req) => {
       player_count,
       max_price_per_player,
       fire_at,
+      // Payment — the authorized PaymentIntent to capture once booked
+      stripe_payment_intent_id,
+      payment_status,
       // Platform info passed directly from frontend (avoids extra DB lookup)
       booking_platform:     platform_from_frontend,
       platform_course_id:   course_id_from_frontend,
@@ -81,6 +84,9 @@ serve(async (req) => {
     }
 
     // ── Resolve platform credentials from Edge Function secrets ────────────
+    // Login is cookie/session based now, so these are optional — we still
+    // forward them if present (harmless), but a missing value no longer blocks
+    // job creation the way it used to.
     const PLATFORM_CREDS: Record<string, [string, string]> = {
       chronogolf: ["CHRONOGOLF_EMAIL", "CHRONOGOLF_PASSWORD"],
       golfnow:    ["GOLFNOW_EMAIL",    "GOLFNOW_PASSWORD"],
@@ -90,16 +96,8 @@ serve(async (req) => {
     };
 
     const [emailVar, pwVar] = PLATFORM_CREDS[platform] ?? ["CHRONOGOLF_EMAIL", "CHRONOGOLF_PASSWORD"];
-    const platform_email    = Deno.env.get(emailVar) ?? "";
-    const platform_password = Deno.env.get(pwVar)    ?? "";
-
-    if (!platform_email || !platform_password) {
-      console.error(`Missing credentials: ${emailVar} / ${pwVar}`);
-      return new Response(
-        JSON.stringify({ error: `Platform credentials not configured for ${platform}` }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-      );
-    }
+    const platform_email    = Deno.env.get(emailVar) ?? null;
+    const platform_password = Deno.env.get(pwVar)    ?? null;
 
     // ── Insert into scheduled_jobs ─────────────────────────────────────────
     const { data: job, error: insertError } = await supabase
@@ -118,6 +116,8 @@ serve(async (req) => {
         max_price_per_player: max_price_per_player ?? null,
         booking_platform:     platform,
         platform_course_id:   platform_id || null,
+        stripe_payment_intent_id: stripe_payment_intent_id ?? null,
+        payment_status:       payment_status ?? "none",
         fire_at:              fire_at ?? new Date().toISOString(),
         status:               "pending",
       })

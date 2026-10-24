@@ -358,6 +358,8 @@ const CheckoutForm = ({ bookingData }: { bookingData: BookingData }) => {
             latest_time:           convertTo24Hour(bookingData.latestTime).slice(0, 5),
             player_count:          bookingData.numberOfPlayers,
             fire_at:               new Date().toISOString(),
+            stripe_payment_intent_id: confirmedPaymentIntentId,
+            payment_status:        confirmedPaymentStatus,
             booking_platform:      bookingPlatform,
             platform_course_id:    platformCourseId,
             platform_booking_url:  platformBookingUrl,

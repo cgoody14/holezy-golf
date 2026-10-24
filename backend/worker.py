@@ -20,6 +20,8 @@
 #   SENTRY_DSN            — optional, for error tracking
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 import os
 import traceback

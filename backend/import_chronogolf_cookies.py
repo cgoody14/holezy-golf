@@ -113,6 +113,54 @@ async def _verify(state_path: str) -> tuple[bool, str | None]:
         return ok, who
 
 
+def _push_to_supabase(state: dict, platform: str = "chronogolf") -> None:
+    """
+    Upsert the session into the platform_sessions table so the Railway worker
+    (which has no local file) can reuse this login. Best-effort + dependency
+    free (stdlib urllib). Needs SUPABASE_URL + SUPABASE_SERVICE_KEY in the env.
+    """
+    import urllib.request
+    import urllib.error
+    from datetime import datetime, timezone
+
+    base = os.getenv("SUPABASE_URL")
+    key  = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not base or not key:
+        print("   ⚠  SUPABASE_URL / SUPABASE_SERVICE_KEY not set — session saved")
+        print("      locally only. The live worker won't see it until you set those")
+        print("      in backend/.env and re-run (or paste the state into the")
+        print("      platform_sessions table).")
+        return
+
+    payload = json.dumps({
+        "platform": platform,
+        "storage_state": state,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{base}/rest/v1/platform_sessions?on_conflict=platform",
+        data=payload,
+        method="POST",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            if resp.status in (200, 201, 204):
+                print(f"   ☁️  session pushed to Supabase platform_sessions ({platform})")
+            else:
+                print(f"   ⚠  Supabase push returned HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        print(f"   ⚠  Supabase push failed: HTTP {e.code} {e.read()[:200]!r}")
+    except Exception as e:
+        print(f"   ⚠  Supabase push failed: {e}")
+
+
 def main() -> int:
     src = sys.argv[1] if len(sys.argv) > 1 else "cookies.json"
     if not os.path.exists(src):
@@ -143,6 +191,7 @@ def main() -> int:
     ok, who = asyncio.run(_verify(STATE_FILE))
     if ok:
         print(f"\n✅ Session valid — logged in as {who}.")
+        _push_to_supabase(state)   # make it available to the live worker
         print("   Now run:  python test_book_chronogolf.py … --dry-run")
         return 0
     print("\n⚠  Cookies imported but the session didn't verify as logged in.")

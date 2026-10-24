@@ -31,9 +31,13 @@
 #   Columns written: status, attempts, confirmation_code, last_error, updated_at
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 import importlib
+import json
 import os
+import tempfile
 import traceback
 from datetime import datetime, timezone
 
@@ -87,6 +91,101 @@ def _update_job(job_id: str, fields: dict) -> None:
     _db().table("scheduled_jobs").update(
         {**fields, "updated_at": _now()}
     ).eq("id", job_id).execute()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SESSION STATE — the cookie login the booking engine reuses
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_session_state(platform: str) -> str | None:
+    """
+    Fetch the Playwright storage_state for `platform` from Supabase and write
+    it to a temp file, returning that path (to pass to new_context). The
+    ephemeral Railway disk has no saved login, so the session lives in the
+    platform_sessions table (written by import_chronogolf_cookies.py).
+
+    Falls back to a local CHRONOGOLF_STATE file for dev. Returns None if no
+    session is available anywhere (caller must fail the job clearly).
+    """
+    try:
+        res = (
+            _db().table("platform_sessions")
+            .select("storage_state")
+            .eq("platform", platform)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if rows and rows[0].get("storage_state"):
+            state = rows[0]["storage_state"]
+            fd, path = tempfile.mkstemp(prefix=f"{platform}_state_", suffix=".json")
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f)
+            return path
+    except Exception as e:
+        print(f"[scheduler] could not load session from platform_sessions: {e}")
+
+    local = os.getenv("CHRONOGOLF_STATE")
+    if local and os.path.exists(local):
+        return local
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAYMENT — capture on booked, release on failed (manual-capture PaymentIntent)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _settle_payment(job: dict, booked: bool) -> None:
+    """
+    Settle the authorized Stripe PaymentIntent for this job.
+
+    On a successful booking we CAPTURE the authorization (collect the fee); on
+    failure we CANCEL it (release the hold so the customer is never charged).
+    Free bookings (coupon → SetupIntent, payment_status 'free') have nothing to
+    settle. The matching Client_Bookings row is updated to mirror the outcome.
+    """
+    pid     = job.get("stripe_payment_intent_id")
+    pstatus = job.get("payment_status")
+    if not pid or pstatus != "authorized":
+        return  # free booking or nothing authorized — nothing to settle
+
+    try:
+        import stripe
+        stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    except Exception as e:
+        print(f"[scheduler] Stripe not configured — cannot settle {pid}: {e}")
+        return
+
+    new_status = None
+    try:
+        if booked:
+            stripe.PaymentIntent.capture(pid)        # capture full authorized amount
+            new_status = "captured"
+            print(f"[scheduler] 💳 captured payment {pid}")
+        else:
+            stripe.PaymentIntent.cancel(pid)         # release the hold
+            new_status = "released"
+            print(f"[scheduler] 💳 released authorization {pid}")
+    except Exception as e:
+        print(f"[scheduler] payment settle error for {pid}: {e}")
+        return
+
+    # Mirror the outcome onto the job and the customer-facing booking row.
+    try:
+        _update_job(job["id"], {"payment_status": new_status})
+    except Exception:
+        pass
+    try:
+        _db().table("Client_Bookings").update({
+            "payment_status": new_status,
+            "booking_status": "booked" if booked else "failed",
+        }).eq("email", job.get("golfer_email")) \
+          .eq("preferred_course", job.get("course_name")) \
+          .eq("booking_date", job.get("booking_date")) \
+          .eq("stripe_payment_intent_id", pid) \
+          .execute()
+    except Exception as e:
+        print(f"[scheduler] Client_Bookings write-back failed: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,18 +276,29 @@ async def scrape_until_found(booking_id: str) -> None:
         booking = importlib.import_module(module_name)
         print(f"[scheduler] Using engine: {module_name}")
 
-    # ── Resolve platform credentials from env vars ────────────────────────
-    # Default to ChronoGolf creds for custom-adapter jobs on any platform.
+    # ── Resolve platform credentials (optional now) ──────────────────────
+    # The standard engine logs in by reusing a saved cookie session, not a
+    # password. Credentials are only still needed by custom adapters, so a
+    # missing value is NOT fatal for the standard engine path.
     email_var, pw_var = PLATFORM_CREDS.get(platform, PLATFORM_CREDS["chronogolf"])
     cg_email    = os.environ.get(email_var, "")
     cg_password = os.environ.get(pw_var, "")
 
-    if not cg_email or not cg_password:
-        _update_job(job["id"], {
-            "status":     "failed",
-            "last_error": f"Missing credentials: {email_var} / {pw_var} not set in env",
-        })
-        return
+    # ── Load the saved login session for the standard engine ──────────────
+    session_path = None
+    if not adapter:
+        session_path = _load_session_state(platform)
+        if not session_path:
+            _update_job(job["id"], {
+                "status":     "failed",
+                "last_error": (f"No {platform} session available — run "
+                               f"import_chronogolf_cookies.py to store one."),
+            })
+            try:
+                await notifications.send_failure(job)
+            except Exception:
+                pass
+            return
 
     # ── Extract booking parameters ────────────────────────────────────────
     job_id       = job["id"]
@@ -213,6 +323,7 @@ async def scrape_until_found(booking_id: str) -> None:
 
     browser = None
     pw_ctx  = None
+    context = None
 
     try:
         pw_ctx  = async_playwright()
@@ -221,6 +332,10 @@ async def scrape_until_found(booking_id: str) -> None:
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],  # needed on Railway
         )
+        # Reuse the saved login (cookies) so the engine is authenticated.
+        context = await browser.new_context(
+            **({"storage_state": session_path} if session_path else {})
+        )
 
         # ── Attempt loop ──────────────────────────────────────────────────
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -228,7 +343,7 @@ async def scrape_until_found(booking_id: str) -> None:
 
             _update_job(job_id, {"attempts": attempt})
 
-            page = await browser.new_page()
+            page = await context.new_page()
             try:
                 if adapter:
                     # ── Custom adapter path ───────────────────────────────
@@ -264,14 +379,14 @@ async def scrape_until_found(booking_id: str) -> None:
 
                 else:
                     # ── Standard platform engine path ─────────────────────
-                    await booking.login(page, cg_email, cg_password)
+                    await booking.login(page)   # reuses the saved cookie session
 
                     slots = await booking.search_slots(
                         page, course_url, booking_date, player_count, time_window
                     )
 
                     if max_price is not None:
-                        slots = [s for s in slots if s["green_fee"] <= max_price]
+                        slots = [s for s in slots if (s.get("subtotal") or 0) <= max_price]
 
                     if not slots:
                         raise _NoAvailability("No matching slots on this attempt")
@@ -285,6 +400,9 @@ async def scrape_until_found(booking_id: str) -> None:
                     "confirmation_code": confirm_code,
                     "last_error":        None,
                 })
+
+                # 5b. Capture the authorized payment now that we've booked.
+                _settle_payment(job, booked=True)
 
                 # 6. Notify golfer
                 enriched = {
@@ -323,6 +441,7 @@ async def scrape_until_found(booking_id: str) -> None:
         # ── All attempts exhausted ────────────────────────────────────────
         print(f"[scheduler] FAILED — exhausted {MAX_ATTEMPTS} attempts for job {job_id}")
         _update_job(job_id, {"status": "failed"})
+        _settle_payment(job, booked=False)   # release the authorization hold
         await notifications.send_failure(job)
 
     except Exception:
@@ -332,6 +451,7 @@ async def scrape_until_found(booking_id: str) -> None:
                 "status":     "failed",
                 "last_error": "Browser/setup error — see worker logs",
             })
+            _settle_payment(job, booked=False)   # release the hold on a crash
             await notifications.send_failure(job)
         except Exception:
             traceback.print_exc()
@@ -346,5 +466,11 @@ async def scrape_until_found(booking_id: str) -> None:
         if pw_ctx:
             try:
                 await pw_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+        # Clean up the temp session file (never the local dev file).
+        if session_path and session_path.startswith(tempfile.gettempdir()):
+            try:
+                os.remove(session_path)
             except Exception:
                 pass
