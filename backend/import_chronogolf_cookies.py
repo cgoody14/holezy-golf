@@ -33,6 +33,12 @@ import os
 import re
 import sys
 
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())   # pick up SUPABASE_URL / SUPABASE_SERVICE_KEY from .env
+except Exception:
+    pass
+
 STATE_FILE  = os.getenv("CHRONOGOLF_STATE", "chronogolf_state.json")
 CHRONO_BASE = "https://www.chronogolf.com"
 
