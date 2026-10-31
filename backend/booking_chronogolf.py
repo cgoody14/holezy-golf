@@ -268,6 +268,11 @@ async def search_slots(
     latest   = time_window.get("latest", "23:59")
     holes    = "18"
 
+    # Course URLs can arrive with a stale query string (e.g. a baked-in
+    # ?date=2025-09-07 from the course DB). Strip it so we don't build a
+    # double-?date URL that ChronoGolf mis-parses into a past date.
+    course_url = course_url.split("?")[0].rstrip("/")
+
     nav = f"{course_url}?date={date}&nb_holes={holes}"
     print(f"[chronogolf] ② search → {nav}")
 
