@@ -218,7 +218,21 @@ async def login(page: Page, email: str = "", password: str = "") -> None:
         await page.goto(f"{CHRONO_BASE}/marketplace", wait_until="domcontentloaded", timeout=30_000)
 
         sess = await page.request.get(f"{CHRONO_BASE}/marketplace/sessions", headers=_api_headers())
-        user = await sess.json() if sess.ok else {}
+        # A valid session returns JSON. A 200 with a non-JSON body means we got a
+        # Cloudflare challenge / interstitial (stale __cf_bm or expired login),
+        # not a real session — handle it as expired instead of crashing on json().
+        user = {}
+        if sess.ok:
+            try:
+                user = await sess.json()
+            except Exception:
+                preview = (await sess.text())[:120].replace("\n", " ")
+                await _shot(page, "session_challenge")
+                raise SessionExpired(
+                    "ChronoGolf returned a non-JSON session response (likely a "
+                    f"Cloudflare challenge / expired token). Preview: {preview!r}. "
+                    "Re-export your cookies and run: python import_chronogolf_cookies.py"
+                )
         user_id = user.get("id")
         if not user_id:
             await _shot(page, "session_expired")

@@ -424,6 +424,16 @@ async def scrape_until_found(booking_id: str) -> None:
                 print(f"[scheduler] {err_msg}")
                 traceback.print_exc()
                 _update_job(job_id, {"last_error": err_msg})
+                # A stale/expired login won't recover by retrying — fail fast so
+                # the operator re-imports cookies instead of burning 20 attempts.
+                if type(exc).__name__ == "SessionExpired":
+                    _update_job(job_id, {"status": "failed"})
+                    _settle_payment(job, booked=False)
+                    try:
+                        await notifications.send_failure(job)
+                    except Exception:
+                        pass
+                    return
 
             finally:
                 try:
