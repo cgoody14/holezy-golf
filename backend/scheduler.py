@@ -31,9 +31,13 @@
 #   Columns written: status, attempts, confirmation_code, last_error, updated_at
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 import importlib
+import json
 import os
+import tempfile
 import traceback
 from datetime import datetime, timezone
 
@@ -119,6 +123,44 @@ def _settle_payment(job_id: str, outcome: str) -> None:
     except Exception:
         print(f"[scheduler] settle-booking-payment errored for job={job_id} outcome={outcome}")
         traceback.print_exc()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SESSION STATE — the cookie login the booking engine reuses
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_session_state(platform: str) -> str | None:
+    """
+    Fetch the Playwright storage_state for `platform` from Supabase and write
+    it to a temp file, returning that path (to pass to new_context). The
+    ephemeral Railway disk has no saved login, so the session lives in the
+    platform_sessions table (written by import_chronogolf_cookies.py).
+
+    Falls back to a local CHRONOGOLF_STATE file for dev. Returns None if no
+    session is available anywhere (caller must fail the job clearly).
+    """
+    try:
+        res = (
+            _db().table("platform_sessions")
+            .select("storage_state")
+            .eq("platform", platform)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if rows and rows[0].get("storage_state"):
+            state = rows[0]["storage_state"]
+            fd, path = tempfile.mkstemp(prefix=f"{platform}_state_", suffix=".json")
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f)
+            return path
+    except Exception as e:
+        print(f"[scheduler] could not load session from platform_sessions: {e}")
+
+    local = os.getenv("CHRONOGOLF_STATE")
+    if local and os.path.exists(local):
+        return local
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,18 +251,29 @@ async def scrape_until_found(booking_id: str) -> None:
         booking = importlib.import_module(module_name)
         print(f"[scheduler] Using engine: {module_name}")
 
-    # ── Resolve platform credentials from env vars ────────────────────────
-    # Default to ChronoGolf creds for custom-adapter jobs on any platform.
+    # ── Resolve platform credentials (optional now) ──────────────────────
+    # The standard engine logs in by reusing a saved cookie session, not a
+    # password. Credentials are only still needed by custom adapters, so a
+    # missing value is NOT fatal for the standard engine path.
     email_var, pw_var = PLATFORM_CREDS.get(platform, PLATFORM_CREDS["chronogolf"])
     cg_email    = os.environ.get(email_var, "")
     cg_password = os.environ.get(pw_var, "")
 
-    if not cg_email or not cg_password:
-        _update_job(job["id"], {
-            "status":     "failed",
-            "last_error": f"Missing credentials: {email_var} / {pw_var} not set in env",
-        })
-        return
+    # ── Load the saved login session for the standard engine ──────────────
+    session_path = None
+    if not adapter:
+        session_path = _load_session_state(platform)
+        if not session_path:
+            _update_job(job["id"], {
+                "status":     "failed",
+                "last_error": (f"No {platform} session available — run "
+                               f"import_chronogolf_cookies.py to store one."),
+            })
+            try:
+                await notifications.send_failure(job)
+            except Exception:
+                pass
+            return
 
     # ── Extract booking parameters ────────────────────────────────────────
     job_id       = job["id"]
@@ -245,6 +298,7 @@ async def scrape_until_found(booking_id: str) -> None:
 
     browser = None
     pw_ctx  = None
+    context = None
 
     try:
         pw_ctx  = async_playwright()
@@ -253,6 +307,10 @@ async def scrape_until_found(booking_id: str) -> None:
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],  # needed on Railway
         )
+        # Reuse the saved login (cookies) so the engine is authenticated.
+        context = await browser.new_context(
+            **({"storage_state": session_path} if session_path else {})
+        )
 
         # ── Attempt loop ──────────────────────────────────────────────────
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -260,7 +318,7 @@ async def scrape_until_found(booking_id: str) -> None:
 
             _update_job(job_id, {"attempts": attempt})
 
-            page = await browser.new_page()
+            page = await context.new_page()
             try:
                 if adapter:
                     # ── Custom adapter path ───────────────────────────────
@@ -296,14 +354,14 @@ async def scrape_until_found(booking_id: str) -> None:
 
                 else:
                     # ── Standard platform engine path ─────────────────────
-                    await booking.login(page, cg_email, cg_password)
+                    await booking.login(page)   # reuses the saved cookie session
 
                     slots = await booking.search_slots(
                         page, course_url, booking_date, player_count, time_window
                     )
 
                     if max_price is not None:
-                        slots = [s for s in slots if s["green_fee"] <= max_price]
+                        slots = [s for s in slots if (s.get("subtotal") or 0) <= max_price]
 
                     if not slots:
                         raise _NoAvailability("No matching slots on this attempt")
@@ -339,6 +397,16 @@ async def scrape_until_found(booking_id: str) -> None:
                 print(f"[scheduler] {err_msg}")
                 traceback.print_exc()
                 _update_job(job_id, {"last_error": err_msg})
+                # A stale/expired login won't recover by retrying — fail fast so
+                # the operator re-imports cookies instead of burning 20 attempts.
+                if type(exc).__name__ == "SessionExpired":
+                    _update_job(job_id, {"status": "failed"})
+                    _settle_payment(job_id, "failed")
+                    try:
+                        await notifications.send_failure(job)
+                    except Exception:
+                        pass
+                    return
 
             finally:
                 try:
@@ -356,7 +424,7 @@ async def scrape_until_found(booking_id: str) -> None:
         # ── All attempts exhausted ────────────────────────────────────────
         print(f"[scheduler] FAILED — exhausted {MAX_ATTEMPTS} attempts for job {job_id}")
         _update_job(job_id, {"status": "failed"})
-        _settle_payment(job_id, "failed")
+        _settle_payment(job_id, "failed")   # release the authorization hold
         await notifications.send_failure(job)
 
     except Exception:
@@ -366,7 +434,7 @@ async def scrape_until_found(booking_id: str) -> None:
                 "status":     "failed",
                 "last_error": "Browser/setup error — see worker logs",
             })
-            _settle_payment(job_id, "failed")
+            _settle_payment(job_id, "failed")   # release the hold on a crash
             await notifications.send_failure(job)
         except Exception:
             traceback.print_exc()
@@ -381,5 +449,11 @@ async def scrape_until_found(booking_id: str) -> None:
         if pw_ctx:
             try:
                 await pw_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+        # Clean up the temp session file (never the local dev file).
+        if session_path and session_path.startswith(tempfile.gettempdir()):
+            try:
+                os.remove(session_path)
             except Exception:
                 pass

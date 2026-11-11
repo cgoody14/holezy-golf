@@ -20,6 +20,8 @@
 #   SENTRY_DSN            — optional, for error tracking
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 import os
 import traceback
@@ -146,10 +148,7 @@ async def _poll_once(db) -> None:
         print(f"[worker] Claimed job {job['id']} ({course} on {date_})")
 
         # Create a top-level task so failures in one job don't cancel others
-        task = asyncio.create_task(
-            _run_job_safe(job),
-            name=f"job-{job['id'][:8]}",
-        )
+        task = asyncio.create_task(_run_job_safe(job))
         tasks.append(task)
 
     if tasks:

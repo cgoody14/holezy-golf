@@ -25,10 +25,19 @@
 # Re-do this whenever the engine says "SessionExpired" (sessions last a while).
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
+import re
 import sys
+
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())   # pick up SUPABASE_URL / SUPABASE_SERVICE_KEY from .env
+except Exception:
+    pass
 
 STATE_FILE  = os.getenv("CHRONOGOLF_STATE", "chronogolf_state.json")
 CHRONO_BASE = "https://www.chronogolf.com"
@@ -41,6 +50,25 @@ _SAMESITE = {
 }
 
 
+def _clean_domain(d: str) -> str:
+    """
+    Normalize a cookie domain. Cookie-Editor exports a plain hostname
+    (".chronogolf.com" / "www.chronogolf.com"), but if the JSON was pasted
+    through a tool that auto-links URLs, a value can arrive mangled as
+    "[www.chronogolf.com](https://www.chronogolf.com)". Pull the real host
+    back out so the session cookie still matches the site.
+    """
+    if not d:
+        return ".chronogolf.com"
+    d = d.strip()
+    if "](" in d:  # markdown-link artifact
+        lead = "." if d.startswith(".") else ""
+        m = re.search(r"\[([^\]]+)\]", d)
+        if m:
+            d = lead + m.group(1).lstrip(".")
+    return d
+
+
 def _to_storage_state(raw_cookies: list) -> dict:
     """Convert a Cookie-Editor JSON export into a Playwright storage_state dict."""
     cookies = []
@@ -48,7 +76,7 @@ def _to_storage_state(raw_cookies: list) -> dict:
         name = c.get("name")
         if not name:
             continue
-        domain = c.get("domain") or ".chronogolf.com"
+        domain = _clean_domain(c.get("domain") or ".chronogolf.com")
         cookie = {
             "name": name,
             "value": c.get("value", ""),
@@ -91,6 +119,54 @@ async def _verify(state_path: str) -> tuple[bool, str | None]:
         return ok, who
 
 
+def _push_to_supabase(state: dict, platform: str = "chronogolf") -> None:
+    """
+    Upsert the session into the platform_sessions table so the Railway worker
+    (which has no local file) can reuse this login. Best-effort + dependency
+    free (stdlib urllib). Needs SUPABASE_URL + SUPABASE_SERVICE_KEY in the env.
+    """
+    import urllib.request
+    import urllib.error
+    from datetime import datetime, timezone
+
+    base = os.getenv("SUPABASE_URL")
+    key  = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not base or not key:
+        print("   ⚠  SUPABASE_URL / SUPABASE_SERVICE_KEY not set — session saved")
+        print("      locally only. The live worker won't see it until you set those")
+        print("      in backend/.env and re-run (or paste the state into the")
+        print("      platform_sessions table).")
+        return
+
+    payload = json.dumps({
+        "platform": platform,
+        "storage_state": state,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{base}/rest/v1/platform_sessions?on_conflict=platform",
+        data=payload,
+        method="POST",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            if resp.status in (200, 201, 204):
+                print(f"   ☁️  session pushed to Supabase platform_sessions ({platform})")
+            else:
+                print(f"   ⚠  Supabase push returned HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        print(f"   ⚠  Supabase push failed: HTTP {e.code} {e.read()[:200]!r}")
+    except Exception as e:
+        print(f"   ⚠  Supabase push failed: {e}")
+
+
 def main() -> int:
     src = sys.argv[1] if len(sys.argv) > 1 else "cookies.json"
     if not os.path.exists(src):
@@ -121,6 +197,7 @@ def main() -> int:
     ok, who = asyncio.run(_verify(STATE_FILE))
     if ok:
         print(f"\n✅ Session valid — logged in as {who}.")
+        _push_to_supabase(state)   # make it available to the live worker
         print("   Now run:  python test_book_chronogolf.py … --dry-run")
         return 0
     print("\n⚠  Cookies imported but the session didn't verify as logged in.")

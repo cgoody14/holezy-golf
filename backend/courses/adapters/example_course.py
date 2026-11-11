@@ -10,6 +10,8 @@
 # That's it. Nothing else changes.
 # =============================================================================
 
+from __future__ import annotations
+
 import asyncio
 
 from playwright.async_api import Page

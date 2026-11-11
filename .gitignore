@@ -47,6 +47,9 @@ backend/chronogolf_state.json
 cookies.json
 backend/cookies.json
 
+# Engine debug screenshots
+backend/screenshots/
+
 # Supabase CLI local state
 supabase/.temp/
 

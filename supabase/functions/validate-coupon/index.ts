@@ -28,20 +28,32 @@ serve(async (req) => {
       apiVersion: "2025-08-27.basil",
     });
 
-    const promotionCodes = await stripe.promotionCodes.list({
-      code: promoCode,
-      active: true,
-      limit: 1,
-    });
+    // Promotion codes are matched case-insensitively at redemption, but the
+    // list() `code` filter matches what's stored. Try the code as typed, then
+    // its upper- and lower-cased forms, so "save10" still finds "SAVE10".
+    const tried = Array.from(new Set([
+      promoCode,
+      promoCode.toUpperCase(),
+      promoCode.toLowerCase(),
+    ]));
 
-    if (promotionCodes.data.length === 0) {
+    let promotionCode: Stripe.PromotionCode | undefined;
+    for (const code of tried) {
+      const list = await stripe.promotionCodes.list({ code, active: true, limit: 1 });
+      if (list.data.length > 0) {
+        promotionCode = list.data[0];
+        break;
+      }
+    }
+
+    if (!promotionCode) {
+      console.log(`No active promotion code found for "${promoCode}" (tried ${tried.join(", ")}).`);
       return new Response(
         JSON.stringify({ valid: false, error: "Invalid promo code" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    const promotionCode = promotionCodes.data[0];
     const coupon = promotionCode.coupon;
 
     if (!coupon.valid) {
