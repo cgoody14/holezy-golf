@@ -49,3 +49,9 @@ backend/cookies.json
 
 # Engine debug screenshots
 backend/screenshots/
+
+# Supabase CLI local state
+supabase/.temp/
+
+# Local MCP server config (user-specific tooling, not project config)
+.mcp.json

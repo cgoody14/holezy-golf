@@ -41,6 +41,7 @@ import tempfile
 import traceback
 from datetime import datetime, timezone
 
+import requests
 from dotenv import load_dotenv, find_dotenv
 from supabase import create_client
 
@@ -93,6 +94,37 @@ def _update_job(job_id: str, fields: dict) -> None:
     ).eq("id", job_id).execute()
 
 
+def _settle_payment(job_id: str, outcome: str) -> None:
+    """
+    Tell settle-booking-payment to capture (outcome="booked") or
+    release/refund (outcome="failed") the customer's Stripe authorization.
+
+    Best-effort: logs on failure but never raises, since a payment-settlement
+    hiccup shouldn't take down the booking job itself.
+    """
+    try:
+        service_key = os.environ["SUPABASE_SERVICE_KEY"]
+        resp = requests.post(
+            f"{os.environ['SUPABASE_URL']}/functions/v1/settle-booking-payment",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+            },
+            json={"job_id": job_id, "outcome": outcome},
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            print(
+                f"[scheduler] settle-booking-payment failed for job={job_id} "
+                f"outcome={outcome}: {resp.status_code} {resp.text[:300]}"
+            )
+        else:
+            print(f"[scheduler] settle-booking-payment ok for job={job_id} outcome={outcome}")
+    except Exception:
+        print(f"[scheduler] settle-booking-payment errored for job={job_id} outcome={outcome}")
+        traceback.print_exc()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE — the cookie login the booking engine reuses
 # ─────────────────────────────────────────────────────────────────────────────
@@ -129,63 +161,6 @@ def _load_session_state(platform: str) -> str | None:
     if local and os.path.exists(local):
         return local
     return None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAYMENT — capture on booked, release on failed (manual-capture PaymentIntent)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _settle_payment(job: dict, booked: bool) -> None:
-    """
-    Settle the authorized Stripe PaymentIntent for this job.
-
-    On a successful booking we CAPTURE the authorization (collect the fee); on
-    failure we CANCEL it (release the hold so the customer is never charged).
-    Free bookings (coupon → SetupIntent, payment_status 'free') have nothing to
-    settle. The matching Client_Bookings row is updated to mirror the outcome.
-    """
-    pid     = job.get("stripe_payment_intent_id")
-    pstatus = job.get("payment_status")
-    if not pid or pstatus != "authorized":
-        return  # free booking or nothing authorized — nothing to settle
-
-    try:
-        import stripe
-        stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
-    except Exception as e:
-        print(f"[scheduler] Stripe not configured — cannot settle {pid}: {e}")
-        return
-
-    new_status = None
-    try:
-        if booked:
-            stripe.PaymentIntent.capture(pid)        # capture full authorized amount
-            new_status = "captured"
-            print(f"[scheduler] 💳 captured payment {pid}")
-        else:
-            stripe.PaymentIntent.cancel(pid)         # release the hold
-            new_status = "released"
-            print(f"[scheduler] 💳 released authorization {pid}")
-    except Exception as e:
-        print(f"[scheduler] payment settle error for {pid}: {e}")
-        return
-
-    # Mirror the outcome onto the job and the customer-facing booking row.
-    try:
-        _update_job(job["id"], {"payment_status": new_status})
-    except Exception:
-        pass
-    try:
-        _db().table("Client_Bookings").update({
-            "payment_status": new_status,
-            "booking_status": "booked" if booked else "failed",
-        }).eq("email", job.get("golfer_email")) \
-          .eq("preferred_course", job.get("course_name")) \
-          .eq("booking_date", job.get("booking_date")) \
-          .eq("stripe_payment_intent_id", pid) \
-          .execute()
-    except Exception as e:
-        print(f"[scheduler] Client_Bookings write-back failed: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -400,9 +375,7 @@ async def scrape_until_found(booking_id: str) -> None:
                     "confirmation_code": confirm_code,
                     "last_error":        None,
                 })
-
-                # 5b. Capture the authorized payment now that we've booked.
-                _settle_payment(job, booked=True)
+                _settle_payment(job_id, "booked")
 
                 # 6. Notify golfer
                 enriched = {
@@ -428,7 +401,7 @@ async def scrape_until_found(booking_id: str) -> None:
                 # the operator re-imports cookies instead of burning 20 attempts.
                 if type(exc).__name__ == "SessionExpired":
                     _update_job(job_id, {"status": "failed"})
-                    _settle_payment(job, booked=False)
+                    _settle_payment(job_id, "failed")
                     try:
                         await notifications.send_failure(job)
                     except Exception:
@@ -451,7 +424,7 @@ async def scrape_until_found(booking_id: str) -> None:
         # ── All attempts exhausted ────────────────────────────────────────
         print(f"[scheduler] FAILED — exhausted {MAX_ATTEMPTS} attempts for job {job_id}")
         _update_job(job_id, {"status": "failed"})
-        _settle_payment(job, booked=False)   # release the authorization hold
+        _settle_payment(job_id, "failed")   # release the authorization hold
         await notifications.send_failure(job)
 
     except Exception:
@@ -461,7 +434,7 @@ async def scrape_until_found(booking_id: str) -> None:
                 "status":     "failed",
                 "last_error": "Browser/setup error — see worker logs",
             })
-            _settle_payment(job, booked=False)   # release the hold on a crash
+            _settle_payment(job_id, "failed")   # release the hold on a crash
             await notifications.send_failure(job)
         except Exception:
             traceback.print_exc()
