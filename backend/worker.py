@@ -183,6 +183,12 @@ async def main() -> None:
 
     db = _db()
 
+    # RUN_ONCE mode: process whatever is due right now, then exit. Used by the
+    # free GitHub Actions cron (which invokes the worker on a schedule) instead
+    # of an always-on host. On Railway/anything persistent, leave it unset and
+    # the worker loops forever.
+    run_once = os.getenv("RUN_ONCE", "").lower() in ("1", "true", "yes")
+
     while True:
         # ── Heartbeat ─────────────────────────────────────────────────────
         ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
@@ -194,6 +200,10 @@ async def main() -> None:
         except Exception:
             print("[worker] Error in poll cycle (continuing):")
             traceback.print_exc()
+
+        if run_once:
+            print("[worker] RUN_ONCE — done, exiting.")
+            return
 
         # ── Wait ──────────────────────────────────────────────────────────
         await asyncio.sleep(POLL_INTERVAL_SECS)

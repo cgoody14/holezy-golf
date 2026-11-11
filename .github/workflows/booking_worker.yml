@@ -1,0 +1,50 @@
+name: Booking Worker (scheduled)
+
+# Free bridge host for the Holezy booking worker: GitHub Actions runs it on a
+# schedule in RUN_ONCE mode (process whatever jobs are due now, then exit).
+# When you move to an always-on host (Railway), disable this workflow.
+#
+# Timing is best-effort: GitHub may delay scheduled runs, and the cadence is
+# kept conservative to stay within free Actions minutes. For competitive
+# release-time tee times, switch to the always-on worker.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 min (best-effort; GitHub may delay)
+  workflow_dispatch:          # lets you run it on demand from the Actions tab
+
+concurrency:
+  group: booking-worker
+  cancel-in-progress: false   # never kill a booking mid-flight; queue instead
+
+jobs:
+  run-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25        # a single booking retries up to ~20 min
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Install Chromium for Playwright
+        working-directory: backend
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run the worker once
+        working-directory: backend
+        env:
+          RUN_ONCE: "1"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python worker.py
